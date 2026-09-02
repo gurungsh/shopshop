@@ -1,0 +1,6 @@
+@Ordering.API_HostAddress = http://localhost:5077
+
+GET {{Ordering.API_HostAddress}}/health/
+Accept: application/json
+
+###
