@@ -1,3 +1,14 @@
 .vs
 **/bin/
 **/obj/
+*.user
+*.suo
+*.sln.docstates
+appsettings.Development.json
+appsettings.*.json
+launchSettings.json
+!appsettings.json
+!appsettings.Development.example.json
+.env
+*.local
+.vscode/
