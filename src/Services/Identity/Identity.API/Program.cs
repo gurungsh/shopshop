@@ -1,3 +1,4 @@
+using FluentValidation;
 using Identity.API.Endpoints;
 using Identity.API.Services;
 using Identity.API.Services.Common;
@@ -20,6 +21,8 @@ builder.Services.AddScoped<IPasswordHasher<ApplicationUser>, PasswordHasher<Appl
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddOpenApi();
+
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 var app = builder.Build();
 

@@ -1,4 +1,6 @@
-﻿using Identity.API.DTOs;
+﻿using Identity.API.Constants;
+using Identity.API.DTOs;
+using Identity.API.Filters;
 using Identity.API.Services;
 using Identity.API.Services.Common;
 
@@ -18,7 +20,9 @@ namespace Identity.API.Endpoints
                 return result.IsSuccess
                 ? Results.Created($"/api/users/{result.Value!.Id}", result.Value)
                 : ToHttpResult(result);
-            });
+            })
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Admin))
+            .AddEndpointFilter<ValidationFilter<RegisterRequest>>();
 
 
             // POST /api/auth/login
@@ -29,7 +33,8 @@ namespace Identity.API.Endpoints
                 return result.IsSuccess
                 ? Results.Ok(result.Value)
                 : ToHttpResult(result);
-            });
+            })
+            .AddEndpointFilter<ValidationFilter<LoginRequest>>();
 
             return app;
         }
