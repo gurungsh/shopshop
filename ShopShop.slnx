@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />
+    <File Path="readme.md" />
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/Services/" />
@@ -12,4 +13,6 @@
     <Project Path="src/Services/Ordering/Ordering.API/Ordering.API.csproj" />
     <Project Path="src/Services/Ordering/Ordering.Infrastructure/Ordering.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/Services/" />
 </Solution>

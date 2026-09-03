@@ -1,6 +1,7 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Identity.API.Constants;
 using Identity.API.DTOs;
 using Identity.API.Services.Common;
 using Identity.Infrastructure.Data;
@@ -27,10 +28,7 @@ namespace Identity.API.Services
 
         public async Task<Result<AuthResponse>> RegisterAsync(RegisterRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-            {
-                return Result<AuthResponse>.Failure("Email and password are required.", ResultErrorType.BadRequest);
-            }
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
             var existingUser = await _db.Users.AnyAsync(u => u.Email.ToLower() == request.Email.ToLower());
             if (existingUser)
@@ -38,11 +36,11 @@ namespace Identity.API.Services
                 return Result<AuthResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
             }
 
-            var assignedRole = string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) ? "Admin" : "Customer";
+            var assignedRole = string.Equals(request.Role, Roles.Admin, StringComparison.OrdinalIgnoreCase) ? Roles.Admin : Roles.Customer;
 
             var user = new ApplicationUser
             {
-                Email = request.Email,
+                Email = normalizedEmail,
                 Role = assignedRole
             };
 
@@ -59,12 +57,9 @@ namespace Identity.API.Services
 
         public async Task<Result<AuthResponse>> LoginAsync(LoginRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-            {
-                return Result<AuthResponse>.Failure("Email and password are required.", ResultErrorType.BadRequest);
-            }
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
             if (user is null)
             {
                 return Result<AuthResponse>.Failure("Invalid credentials.", ResultErrorType.Unauthorized);
