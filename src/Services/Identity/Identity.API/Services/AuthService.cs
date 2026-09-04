@@ -15,13 +15,13 @@ namespace Identity.API.Services
 {
     public class AuthService : IAuthService
     {
-        private readonly IdentityDbContext _db;
+        private readonly IdentityDbContext _dbContext;
         private readonly IPasswordHasher<ApplicationUser> _hasher;
         private readonly JwtSettings _jwtSettings;
 
         public AuthService(IdentityDbContext db, IPasswordHasher<ApplicationUser> hasher, IOptions<JwtSettings> jwtOptions)
         {
-            _db = db;
+            _dbContext = db;
             _hasher = hasher;
             _jwtSettings = jwtOptions.Value;
         }
@@ -30,7 +30,7 @@ namespace Identity.API.Services
         {
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
-            var existingUser = await _db.Users.AnyAsync(u => u.Email.ToLower() == request.Email.ToLower());
+            var existingUser = await _dbContext.Users.AnyAsync(u => u.Email.ToLower() == request.Email.ToLower());
             if (existingUser)
             {
                 return Result<AuthResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
@@ -46,8 +46,8 @@ namespace Identity.API.Services
 
             user.PasswordHash = _hasher.HashPassword(user, request.Password);
 
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
+            _dbContext.Users.Add(user);
+            await _dbContext.SaveChangesAsync();
 
             var token = GenerateJwtToken(user);
             var response = new AuthResponse(user.Id, user.Email, user.Role, token);
@@ -59,7 +59,7 @@ namespace Identity.API.Services
         {
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
             if (user is null)
             {
                 return Result<AuthResponse>.Failure("Invalid credentials.", ResultErrorType.Unauthorized);
@@ -74,7 +74,7 @@ namespace Identity.API.Services
             if (verificationResult == PasswordVerificationResult.SuccessRehashNeeded)
             {
                 user.PasswordHash = _hasher.HashPassword(user, request.Password);
-                await _db.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync();
             }
 
             var token = GenerateJwtToken(user);

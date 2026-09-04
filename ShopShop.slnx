@@ -15,4 +15,7 @@
   </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Services/" />
+  <Folder Name="/tests/Services/Identity/">
+    <Project Path="tests/Services/Identity/Identity.API.UnitTests/Identity.API.UnitTests.csproj" Id="3b8a4996-92b2-4600-bd49-f899677250cb" />
+  </Folder>
 </Solution>
