@@ -18,25 +18,44 @@ namespace Identity.API.Services
         private readonly IdentityDbContext _dbContext;
         private readonly IPasswordHasher<ApplicationUser> _hasher;
         private readonly JwtSettings _jwtSettings;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(IdentityDbContext db, IPasswordHasher<ApplicationUser> hasher, IOptions<JwtSettings> jwtOptions)
+        public AuthService(
+            IdentityDbContext db,
+            IPasswordHasher<ApplicationUser> hasher,
+            IOptions<JwtSettings> jwtOptions,
+            ILogger<AuthService> logger)
         {
             _dbContext = db;
             _hasher = hasher;
             _jwtSettings = jwtOptions.Value;
+            _logger = logger;
         }
 
         public async Task<Result<AuthResponse>> RegisterAsync(RegisterRequest request)
         {
+            _logger.LogInformation("Register attempt for email: {Email}", request.Email);
+
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
             var existingUser = await _dbContext.Users.AnyAsync(u => u.Email.ToLower() == request.Email.ToLower());
             if (existingUser)
             {
+                _logger.LogWarning("User with this email already exists. {Email}", request.Email);
                 return Result<AuthResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
             }
 
-            var assignedRole = string.Equals(request.Role, Roles.Admin, StringComparison.OrdinalIgnoreCase) ? Roles.Admin : Roles.Customer;
+            string assignedRole = Roles.Customer;
+
+            if (!_dbContext.Users.Any())
+            {
+                // First user is an admin by default
+                assignedRole = Roles.Admin;
+            }
+            else if (string.Equals(request.Role, Roles.Admin, StringComparison.OrdinalIgnoreCase))
+            {
+                assignedRole = Roles.Admin;
+            }
 
             var user = new ApplicationUser
             {
@@ -49,6 +68,8 @@ namespace Identity.API.Services
             _dbContext.Users.Add(user);
             await _dbContext.SaveChangesAsync();
 
+            _logger.LogInformation("User registered successfully - Email: {Email}, Role: {Role}", normalizedEmail, assignedRole);
+
             var token = GenerateJwtToken(user);
             var response = new AuthResponse(user.Id, user.Email, user.Role, token);
 
@@ -57,17 +78,21 @@ namespace Identity.API.Services
 
         public async Task<Result<AuthResponse>> LoginAsync(LoginRequest request)
         {
+            _logger.LogInformation("Login attempt for email: {Email}", request.Email);
+
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
             var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
             if (user is null)
             {
+                _logger.LogWarning("Login failed: User not found - {Email}", normalizedEmail);
                 return Result<AuthResponse>.Failure("Invalid credentials.", ResultErrorType.Unauthorized);
             }
 
             var verificationResult = _hasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
             if (verificationResult == PasswordVerificationResult.Failed)
             {
+                _logger.LogWarning("Login failed: Invalid password - {Email}", normalizedEmail);
                 return Result<AuthResponse>.Failure("Invalid credentials.", ResultErrorType.Unauthorized);
             }
 
@@ -77,14 +102,17 @@ namespace Identity.API.Services
                 await _dbContext.SaveChangesAsync();
             }
 
-            var token = GenerateJwtToken(user);
-            var response = new AuthResponse(user.Id, user.Email, user.Role, token);
+            _logger.LogInformation("User logged in successfully - Email: {Email}, Role: {Role}", normalizedEmail, user.Role);
 
-            return Result<AuthResponse>.Success(response);
+            var token = GenerateJwtToken(user);
+
+            return Result<AuthResponse>.Success(new AuthResponse(user.Id, user.Email, user.Role, token));
         }
 
         private string GenerateJwtToken(ApplicationUser user)
         {
+            _logger.LogDebug("Generating JWT token for user: {Email}", user.Email);
+
             var key = Encoding.UTF8.GetBytes(_jwtSettings.Secret);
 
             var claims = new[]
@@ -108,6 +136,9 @@ namespace Identity.API.Services
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var token = tokenHandler.CreateToken(tokenDescriptor);
+
+            _logger.LogDebug("JWT token generated successfully for user: {Email}", user.Email);
+
             return tokenHandler.WriteToken(token);
         }
     }
