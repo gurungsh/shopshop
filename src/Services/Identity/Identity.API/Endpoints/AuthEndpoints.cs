@@ -3,6 +3,7 @@ using Identity.API.DTOs;
 using Identity.API.Filters;
 using Identity.API.Services;
 using Identity.API.Services.Common;
+using Serilog;
 
 namespace Identity.API.Endpoints
 {
@@ -21,6 +22,7 @@ namespace Identity.API.Endpoints
                 ? Results.Created($"/api/users/{result.Value!.Id}", result.Value)
                 : ToHttpResult(result);
             })
+            .WithName("Register")
             .RequireAuthorization(policy => policy.RequireRole(Roles.Admin))
             .AddEndpointFilter<ValidationFilter<RegisterRequest>>();
 
@@ -34,10 +36,12 @@ namespace Identity.API.Endpoints
                 ? Results.Ok(result.Value)
                 : ToHttpResult(result);
             })
+            .WithName("Login")
             .AddEndpointFilter<ValidationFilter<LoginRequest>>();
 
             return app;
         }
+
         private static IResult ToHttpResult<T>(Result<T> result) => result.ErrorType switch
         {
             ResultErrorType.BadRequest => Results.BadRequest(new { error = result.Error }),

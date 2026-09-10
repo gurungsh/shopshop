@@ -1,4 +1,5 @@
-﻿using Identity.API.Constants;
+﻿using Castle.Core.Logging;
+using Identity.API.Constants;
 using Identity.API.DTOs;
 using Identity.API.Services;
 using Identity.API.Services.Common;
@@ -6,6 +7,7 @@ using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -17,6 +19,7 @@ namespace Identity.API.UnitTests
         private readonly IdentityDbContext _dbContext;
         private readonly Mock<IPasswordHasher<ApplicationUser>> _mockHasher;
         private readonly JwtSettings _jwtSettings;
+        private readonly Mock<ILogger<AuthService>> _mockLogger;
 
         public AuthServiceTests()
         {
@@ -37,15 +40,55 @@ namespace Identity.API.UnitTests
             };
             var jwtOptionsWrapper = Options.Create(_jwtSettings);
 
-            _authService = new AuthService(_dbContext, _mockHasher.Object, jwtOptionsWrapper);
+            _mockLogger = new Mock<ILogger<AuthService>>();
+
+            _authService = new AuthService(_dbContext, _mockHasher.Object, jwtOptionsWrapper, _mockLogger.Object);
         }
 
         #region Register Tests
 
         [Fact]
-        public async Task RegisterAsync_WithValidRequest_ShouldSucceed()
+        public async Task RegisterAsync_WithValidRequest_FirstUserShouldBeAdmin()
         {
             // Arrange
+            var request = new RegisterRequest("test@example.com", "Test@123", Roles.Customer);
+
+            var hashedPassword = "hashed_password_123";
+            _mockHasher
+                .Setup(h => h.HashPassword(It.IsAny<ApplicationUser>(), request.Password))
+                .Returns(hashedPassword);
+
+            // Act 
+            var result = await _authService.RegisterAsync(request);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.Value);
+            Assert.Equal(request.Email, result.Value.Email);
+            Assert.Equal(Roles.Admin, result.Value.Role); // First user is always an admin
+
+            Assert.NotEmpty(result.Value.Token);
+            var tokenParts = result.Value.Token.Split('.');
+            Assert.Equal(3, tokenParts.Length);
+
+            var createdUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+            Assert.NotNull(createdUser);
+            Assert.Equal(hashedPassword, createdUser.PasswordHash);
+        }
+
+        [Fact]
+        public async Task RegisterAsync_WithValidRequest_SecondUserShouldBeAssignedRole()
+        {
+            // Arrange
+            var adminUser = new ApplicationUser
+            {
+                Email = "admin@example.com",
+                PasswordHash = "hashed_password_admin_123",
+                Role = Roles.Admin
+            };
+            _dbContext.Users.Add(adminUser);
+            await _dbContext.SaveChangesAsync();
+
             var request = new RegisterRequest("test@example.com", "Test@123", Roles.Customer);
 
             var hashedPassword = "hashed_password_123";
