@@ -1,9 +1,8 @@
-﻿using Identity.API.Constants;
+﻿using System.Security.Claims;
+using Identity.API.Common;
 using Identity.API.DTOs;
 using Identity.API.Filters;
 using Identity.API.Services;
-using Identity.API.Services.Common;
-using Serilog;
 
 namespace Identity.API.Endpoints
 {
@@ -11,7 +10,8 @@ namespace Identity.API.Endpoints
     {
         public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
         {
-            var group = app.MapGroup("/api/auth");
+            var group = app.MapGroup("/api/auth")
+                .WithTags("Auth");
 
             // POST /api/auth/register
             group.MapPost("/register", async (RegisterRequest request, IAuthService authService) =>
@@ -19,13 +19,11 @@ namespace Identity.API.Endpoints
                 var result = await authService.RegisterAsync(request); ;
 
                 return result.IsSuccess
-                ? Results.Created($"/api/users/{result.Value!.Id}", result.Value)
-                : ToHttpResult(result);
+                    ? Results.Created($"/api/register/{result.Value!.Id}", result.Value)
+                    : EndpointResults.ToHttpResult(result);
             })
             .WithName("Register")
-            .RequireAuthorization(policy => policy.RequireRole(Roles.Admin))
             .AddEndpointFilter<ValidationFilter<RegisterRequest>>();
-
 
             // POST /api/auth/login
             group.MapPost("/login", async (LoginRequest request, IAuthService authService) =>
@@ -33,22 +31,36 @@ namespace Identity.API.Endpoints
                 var result = await authService.LoginAsync(request);
 
                 return result.IsSuccess
-                ? Results.Ok(result.Value)
-                : ToHttpResult(result);
+                    ? Results.Ok(result.Value)
+                    : EndpointResults.ToHttpResult(result);
             })
             .WithName("Login")
             .AddEndpointFilter<ValidationFilter<LoginRequest>>();
 
+            // POST /api/auth/refresh
+            group.MapPost("/refresh", async (RefreshTokenRequest request, IAuthService authService) =>
+            {
+                var result = await authService.RefreshTokenAsync(request);
+
+                return result.IsSuccess
+                    ? Results.Ok(result.Value)
+                    : EndpointResults.ToHttpResult(result);
+            })
+            .WithName("RefreshToken");
+
+            // POST /api/auth/logout
+            group.MapPost("/logout", async (ClaimsPrincipal principal, IAuthService authService) =>
+            {
+                var result = await authService.LogoutAsync(principal);
+
+                return result.IsSuccess
+                    ? Results.Ok(result.Value)
+                    : EndpointResults.ToHttpResult(result);
+            })
+            .WithName("Logout")
+            .RequireAuthorization();
+
             return app;
         }
-
-        private static IResult ToHttpResult<T>(Result<T> result) => result.ErrorType switch
-        {
-            ResultErrorType.BadRequest => Results.BadRequest(new { error = result.Error }),
-            ResultErrorType.Unauthorized => Results.Unauthorized(),
-            ResultErrorType.Conflict => Results.Conflict(new { error = result.Error }),
-            ResultErrorType.NotFound => Results.NotFound(new { error = result.Error }),
-            _ => Results.Problem(result.Error)
-        };
     }
 }

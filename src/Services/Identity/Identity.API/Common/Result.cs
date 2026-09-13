@@ -1,4 +1,4 @@
-﻿namespace Identity.API.Services.Common
+﻿namespace Identity.API.Common
 {
     public class Result<T>
     {

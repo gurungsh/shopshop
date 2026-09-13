@@ -1,9 +1,9 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Identity.API.Common;
 using Identity.API.Constants;
 using Identity.API.DTOs;
-using Identity.API.Services.Common;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
@@ -36,31 +36,19 @@ namespace Identity.API.Services
         {
             _logger.LogInformation("Register attempt for email: {Email}", request.Email);
 
-            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+            var normalizedEmail = NormalizeEmail(request.Email);
 
-            var existingUser = await _dbContext.Users.AnyAsync(u => u.Email.ToLower() == request.Email.ToLower());
+            var existingUser = await _dbContext.Users.AnyAsync(u => string.Equals(u.Email, normalizedEmail));
             if (existingUser)
             {
                 _logger.LogWarning("User with this email already exists. {Email}", request.Email);
                 return Result<AuthResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
             }
 
-            string assignedRole = Roles.Customer;
-
-            if (!_dbContext.Users.Any())
-            {
-                // First user is an admin by default
-                assignedRole = Roles.Admin;
-            }
-            else if (string.Equals(request.Role, Roles.Admin, StringComparison.OrdinalIgnoreCase))
-            {
-                assignedRole = Roles.Admin;
-            }
-
             var user = new ApplicationUser
             {
                 Email = normalizedEmail,
-                Role = assignedRole
+                Role = Roles.Customer
             };
 
             user.PasswordHash = _hasher.HashPassword(user, request.Password);
@@ -68,7 +56,7 @@ namespace Identity.API.Services
             _dbContext.Users.Add(user);
             await _dbContext.SaveChangesAsync();
 
-            _logger.LogInformation("User registered successfully - Email: {Email}, Role: {Role}", normalizedEmail, assignedRole);
+            _logger.LogInformation("User registered successfully - Email: {Email}, Role: {Role}", user.Email, user.Role);
 
             var token = GenerateJwtToken(user);
             var response = new AuthResponse(user.Id, user.Email, user.Role, token);
@@ -80,7 +68,7 @@ namespace Identity.API.Services
         {
             _logger.LogInformation("Login attempt for email: {Email}", request.Email);
 
-            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+            var normalizedEmail = NormalizeEmail(request.Email);
 
             var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
             if (user is null)
@@ -107,6 +95,198 @@ namespace Identity.API.Services
             var token = GenerateJwtToken(user);
 
             return Result<AuthResponse>.Success(new AuthResponse(user.Id, user.Email, user.Role, token));
+        }
+
+        public async Task<Result<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<Result<bool>> LogoutAsync(ClaimsPrincipal principal)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<Result<UserResponse>> GetCurrentUserAsync(ClaimsPrincipal principal)
+        {
+            var userId = GetUserId(principal);
+
+            if (userId is null)
+            {
+                return Result<UserResponse>.Failure("Invalid user identity.", ResultErrorType.Unauthorized);
+            }
+
+            var user = await _dbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId.Value);
+
+            if (user is null)
+            {
+                return Result<UserResponse>.Failure("User not found.", ResultErrorType.NotFound);
+            }
+
+            return Result<UserResponse>.Success(
+                new UserResponse(user.Id, user.Email, user.Role));
+        }
+
+        public async Task<Result<UserResponse>> UpdateCurrentUserAsync(ClaimsPrincipal principal, UpdateCurrentUserRequest request)
+        {
+            {
+                var userId = GetUserId(principal);
+
+                if (userId is null)
+                {
+                    return Result<UserResponse>.Failure("Invalid user identity.", ResultErrorType.Unauthorized);
+                }
+
+                var user = await _dbContext.Users
+                    .FirstOrDefaultAsync(u => u.Id == userId.Value);
+
+                if (user is null)
+                {
+                    return Result<UserResponse>.Failure("User not found.", ResultErrorType.NotFound);
+                }
+
+                var normalizedEmail = NormalizeEmail(request.Email);
+
+                var emailExists = await _dbContext.Users
+                    .AnyAsync(u =>
+                        u.Id != user.Id &&
+                        u.Email == normalizedEmail);
+
+                if (emailExists)
+                {
+                    return Result<UserResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
+                }
+
+                user.Email = normalizedEmail;
+
+                if (!string.IsNullOrWhiteSpace(request.Password))
+                {
+                    user.PasswordHash = _hasher.HashPassword(user, request.Password);
+                }
+
+                await _dbContext.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "User updated successfully - UserId: {UserId}",
+                    user.Id);
+
+                return Result<UserResponse>.Success(
+                    new UserResponse(user.Id, user.Email, user.Role));
+            }
+        }
+
+        public async Task<Result<List<UserResponse>>> GetUsersAsync()
+        {
+            var users = await _dbContext.Users
+                .AsNoTracking()
+                .Select(u => new UserResponse(u.Id, u.Email, u.Role))
+                .ToListAsync();
+
+            return Result<List<UserResponse>>.Success(users);
+        }
+
+        public async Task<Result<UserResponse>> GetUserAsync(string email)
+        {
+            var normalizedEmail = NormalizeEmail(email);
+
+            var user = await _dbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => string.Equals(u.Email, normalizedEmail));
+
+            if (user is null)
+            {
+                return Result<UserResponse>.Failure("User not found.", ResultErrorType.NotFound);
+            }
+
+            return Result<UserResponse>.Success(new UserResponse(user.Id, user.Email, user.Role));
+        }
+
+        public async Task<Result<UserResponse>> CreateUserAsync(AdminCreateUserRequest request)
+        {
+            _logger.LogInformation("Admin user-creation attempt for email: {Email}, Role: {Role}", request.Email, request.Role);
+
+            if (request.Role != Roles.Admin && request.Role != Roles.Customer)
+            {
+                _logger.LogWarning("Invalid role specified during user creation: {Role}", request.Role);
+                return Result<UserResponse>.Failure("Role must be Admin or Customer.", ResultErrorType.BadRequest);
+            }
+
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+
+            var existingUser = await _dbContext.Users.AnyAsync(u => string.Equals(u.Email.ToLowerInvariant(), normalizedEmail));
+            if (existingUser)
+            {
+                _logger.LogWarning("User with this email already exists. {Email}", request.Email);
+                return Result<UserResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
+            }
+
+            var user = new ApplicationUser
+            {
+                Email = normalizedEmail,
+                Role = request.Role
+            };
+
+            user.PasswordHash = _hasher.HashPassword(user, request.Password);
+
+            _dbContext.Users.Add(user);
+            await _dbContext.SaveChangesAsync();
+
+            _logger.LogInformation("User created successfully by admin - Email: {Email}, Role: {Role}", user.Email, user.Role);
+
+            var response = new UserResponse(user.Id, user.Email, user.Role);
+
+            return Result<UserResponse>.Success(response);
+        }
+
+        public async Task<Result<UserResponse>> UpdateUserAsync(Guid id, AdminUpdateUserRequest request)
+        {
+            var user = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.Id == id);
+
+            if (user is null)
+            {
+                return Result<UserResponse>.Failure("User not found.", ResultErrorType.NotFound);
+            }
+
+            var normalizedEmail = NormalizeEmail(request.Email);
+
+            var emailExists = await _dbContext.Users
+                .AnyAsync(u => u.Id != user.Id && string.Equals(u.Email, normalizedEmail));
+
+            if (emailExists)
+            {
+                return Result<UserResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
+            }
+
+            user.Email = normalizedEmail;
+            user.Role = request.Role;
+
+            await _dbContext.SaveChangesAsync();
+
+            _logger.LogInformation("User updated. User Id:{UserId}, Email:{Email}, Role:{Role}", user.Id, user.Email, user.Role);
+
+            return Result<UserResponse>.Success(new UserResponse(user.Id, user.Email, user.Role));
+        }
+
+        public async Task<Result<bool>> DeleteUserAsync(Guid id)
+        {
+            var user = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.Id == id);
+
+            if (user is null)
+            {
+                return Result<bool>.Failure("User not found.", ResultErrorType.NotFound);
+            }
+
+            _dbContext.Users.Remove(user);
+
+            await _dbContext.SaveChangesAsync();
+
+            _logger.LogInformation("User deleted. User Id:{UserId}, Email:{Email}", user.Id, user.Email);
+
+            return Result<bool>.Success(true);
         }
 
         private string GenerateJwtToken(ApplicationUser user)
@@ -140,6 +320,19 @@ namespace Identity.API.Services
             _logger.LogDebug("JWT token generated successfully for user: {Email}", user.Email);
 
             return tokenHandler.WriteToken(token);
+        }
+
+        private static string NormalizeEmail(string email)
+        {
+            return email.Trim().ToLowerInvariant();
+        }
+
+        private static Guid? GetUserId(ClaimsPrincipal principal)
+        {
+            var userIdClaim = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
         }
     }
 }
