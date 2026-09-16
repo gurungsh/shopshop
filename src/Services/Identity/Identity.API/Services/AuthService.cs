@@ -1,9 +1,9 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Identity.API.Common;
-using Identity.API.Constants;
-using Identity.API.DTOs;
+using Identity.Api.Common;
+using Identity.Api.Constants;
+using Identity.Api.DTOs;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-namespace Identity.API.Services
+namespace Identity.Api.Services
 {
     public class AuthService : IAuthService
     {

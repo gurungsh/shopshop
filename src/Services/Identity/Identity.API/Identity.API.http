@@ -1,6 +1,6 @@
-@Identity.API_HostAddress = http://localhost:5178
+@Identity.Api_HostAddress = http://localhost:5178
 
-GET {{Identity.API_HostAddress}}/health/
+GET {{Identity.Api_HostAddress}}/health/
 Accept: application/json
 
 ###

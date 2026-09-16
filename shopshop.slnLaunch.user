@@ -3,11 +3,11 @@
     "Name": "New Profile",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Identity.API\\Identity.API.csproj",
+        "Path": "src\\Services\\Identity\\Identity.Api\\Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Ordering\\Ordering.API\\Ordering.API.csproj",
+        "Path": "src\\Services\\Ordering\\Ordering.Api\\Ordering.Api.csproj",
         "Action": "Start"
       }
     ]

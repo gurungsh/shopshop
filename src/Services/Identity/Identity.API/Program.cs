@@ -1,8 +1,8 @@
 using System.Text;
 using FluentValidation;
-using Identity.API.Common;
-using Identity.API.Endpoints;
-using Identity.API.Services;
+using Identity.Api.Common;
+using Identity.Api.Endpoints;
+using Identity.Api.Services;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -20,7 +20,7 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("Starting Identity.API application.");
+    Log.Information("Starting Identity.Api application.");
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -144,7 +144,7 @@ try
     app.UseAuthorization();
 
     // Endpoint routing
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Identity.API" })).WithTags("Health");
+    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Identity.Api" })).WithTags("Health");
     app.MapAdminUserEndpoints();
     app.MapAuthEndpoints();
     app.MapUserEndpoints();
@@ -159,6 +159,6 @@ catch (Exception ex) when (ex is not HostAbortedException)
 }
 finally
 {
-    Log.Information("Shutting down Identity.API.");
+    Log.Information("Shutting down Identity.Api.");
     Log.CloseAndFlush();
 }

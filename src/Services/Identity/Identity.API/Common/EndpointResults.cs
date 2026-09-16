@@ -1,4 +1,4 @@
-﻿namespace Identity.API.Common;
+﻿namespace Identity.Api.Common;
 
 public static class EndpointResults
 {

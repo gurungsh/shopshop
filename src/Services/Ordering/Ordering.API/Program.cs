@@ -16,6 +16,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.MapGet("/health", () => Results.Ok(new {Status ="Healthy", Service= "Ordering.API" }));
+app.MapGet("/health", () => Results.Ok(new {Status ="Healthy", Service= "Ordering.Api" }));
 
 app.Run();
