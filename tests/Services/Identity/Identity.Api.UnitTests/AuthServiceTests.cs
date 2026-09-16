@@ -21,7 +21,7 @@ namespace Identity.Api.UnitTests
         private readonly Mock<IPasswordHasher<ApplicationUser>> _mockHasher;
         private readonly JwtSettings _jwtSettings;
         private readonly Mock<ILogger<AuthService>> _mockLogger;
-
+        
         public AuthServiceTests()
         {
             var options = new DbContextOptionsBuilder<IdentityDbContext>()
