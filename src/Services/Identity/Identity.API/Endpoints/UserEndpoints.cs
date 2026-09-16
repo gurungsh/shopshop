@@ -1,9 +1,9 @@
-﻿using Identity.API.Common;
-using Identity.API.DTOs;
-using Identity.API.Filters;
-using Identity.API.Services;
+﻿using Identity.Api.Common;
+using Identity.Api.DTOs;
+using Identity.Api.Filters;
+using Identity.Api.Services;
 
-namespace Identity.API.Endpoints;
+namespace Identity.Api.Endpoints;
 
 public static class UserEndpoints
 {

@@ -1,8 +1,8 @@
 ﻿using System.Security.Claims;
-using Identity.API.Common;
-using Identity.API.DTOs;
+using Identity.Api.Common;
+using Identity.Api.DTOs;
 
-namespace Identity.API.Services
+namespace Identity.Api.Services
 {
     public interface IAuthService
     {

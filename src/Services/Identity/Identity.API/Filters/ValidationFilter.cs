@@ -1,6 +1,6 @@
 ﻿using FluentValidation;
 
-namespace Identity.API.Filters
+namespace Identity.Api.Filters
 {
     public class ValidationFilter<T> : IEndpointFilter where T : class
     {

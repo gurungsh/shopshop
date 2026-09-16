@@ -1,4 +1,4 @@
-﻿namespace Identity.API.DTOs;
+﻿namespace Identity.Api.DTOs;
 
 public sealed record RegisterRequest(string Email, string Password);
 public sealed record UpdateUserRequest(string Email, string Password);

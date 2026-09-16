@@ -6,16 +6,16 @@
   <Folder Name="/src/" />
   <Folder Name="/src/Services/" />
   <Folder Name="/src/Services/Identity/">
-    <Project Path="src/Services/Identity/Identity.API/Identity.API.csproj" />
+    <Project Path="src/Services/Identity/Identity.Api/Identity.Api.csproj" />
     <Project Path="src/Services/Identity/Identity.Infrastructure/Identity.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Services/Ordering/">
-    <Project Path="src/Services/Ordering/Ordering.API/Ordering.API.csproj" />
+    <Project Path="src/Services/Ordering/Ordering.Api/Ordering.Api.csproj" />
     <Project Path="src/Services/Ordering/Ordering.Infrastructure/Ordering.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Services/" />
   <Folder Name="/tests/Services/Identity/">
-    <Project Path="tests/Services/Identity/Identity.API.UnitTests/Identity.API.UnitTests.csproj" Id="3b8a4996-92b2-4600-bd49-f899677250cb" />
+    <Project Path="tests/Services/Identity/Identity.Api.UnitTests/Identity.Api.UnitTests.csproj" />
   </Folder>
 </Solution>
