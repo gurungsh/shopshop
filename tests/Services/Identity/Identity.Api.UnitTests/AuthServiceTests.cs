@@ -1,5 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Common.Core;
 using Identity.Api.Common;
 using Identity.Api.Constants;
 using Identity.Api.DTOs;
@@ -19,7 +20,7 @@ namespace Identity.Api.UnitTests
         private readonly AuthService _authService;
         private readonly IdentityDbContext _dbContext;
         private readonly Mock<IPasswordHasher<ApplicationUser>> _mockHasher;
-        private readonly JwtSettings _jwtSettings;
+        private readonly JwtOptions _jwtSettings;
         private readonly Mock<ILogger<AuthService>> _mockLogger;
         
         public AuthServiceTests()
@@ -32,7 +33,7 @@ namespace Identity.Api.UnitTests
             _mockHasher = new Mock<IPasswordHasher<ApplicationUser>>();
             _mockLogger = new Mock<ILogger<AuthService>>();
 
-            _jwtSettings = new JwtSettings
+            _jwtSettings = new JwtOptions
             {
                 Secret = "ThisIsAVeryLongSecretKeyForJwtTokenSigningPurposesOnly1234567890",
                 ExpirationInMinutes = 60,

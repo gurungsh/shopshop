@@ -73,6 +73,29 @@ Owns:
 * Pricing
 * Product availability
 
+```text
+GET    /api/products 
+GET    /api/products/{id} 
+
+GET    /api/services 
+GET    /api/services/{id} 
+
+GET    /api/categories 
+GET    /api/categories/{id} 
+
+POST   /api/admin/products 
+PUT    /api/admin/products/{id} 
+DELETE /api/admin/products/{id} 
+
+POST   /api/admin/services 
+PUT    /api/admin/services/{id} 
+DELETE /api/admin/services/{id} 
+
+POST   /api/admin/categories 
+PUT    /api/admin/categories/{id} 
+DELETE /api/admin/categories/{id}
+```
+
 ### Ordering Service
 
 **Responsibility:** What customers have purchased.
@@ -85,6 +108,16 @@ Owns:
 * Order history
 * Order cancellation
 
+```text
+POST  /api/orders 
+GET   /api/orders 
+GET   /api/orders/{id} 
+
+GET   /api/admin/orders 
+GET   /api/admin/orders/{id} 
+PUT   /api/admin/orders/{id}/status
+POST  /api/admin/orders/{id}/cancel 
+```
 ## Service Communication
 
 ### Synchronous
@@ -106,7 +139,7 @@ Services never access another service's database directly.
 Each service starts with two projects rather than forcing a full Clean Architecture structure.
 
 ```text
-ECommerce/
+ShopShop/
 ├── Identity/
 │   ├── Identity.Api
 │   └── Identity.Infrastructure
