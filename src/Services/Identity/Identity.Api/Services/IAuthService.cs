@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using Common.Core;
 using Identity.Api.Common;
 using Identity.Api.DTOs;
 

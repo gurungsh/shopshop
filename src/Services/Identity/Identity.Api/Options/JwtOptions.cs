@@ -1,6 +1,6 @@
 ﻿namespace Identity.Api.Common
 {
-    public record JwtSettings
+    public record JwtOptions
     {
         public const string SectionName = "JwtSettings";
 

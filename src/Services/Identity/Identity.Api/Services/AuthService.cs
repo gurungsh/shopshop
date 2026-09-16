@@ -1,6 +1,7 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Common.Core;
 using Identity.Api.Common;
 using Identity.Api.Constants;
 using Identity.Api.DTOs;
@@ -17,13 +18,13 @@ namespace Identity.Api.Services
     {
         private readonly IdentityDbContext _dbContext;
         private readonly IPasswordHasher<ApplicationUser> _hasher;
-        private readonly JwtSettings _jwtSettings;
+        private readonly JwtOptions _jwtSettings;
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
             IdentityDbContext db,
             IPasswordHasher<ApplicationUser> hasher,
-            IOptions<JwtSettings> jwtOptions,
+            IOptions<JwtOptions> jwtOptions,
             ILogger<AuthService> logger)
         {
             _dbContext = db;
