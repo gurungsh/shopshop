@@ -178,23 +178,32 @@ namespace Identity.Api.Services
             }
         }
 
-        public async Task<Result<List<UserResponse>>> GetUsersAsync()
+        public async Task<Result<List<UserResponse>>> GetUsersAsync(UserQuery query)
         {
-            var users = await _dbContext.Users
-                .AsNoTracking()
-                .Select(u => new UserResponse(u.Id, u.Email, u.Role))
-                .ToListAsync();
+            var users = _dbContext.Users.AsNoTracking();
 
-            return Result<List<UserResponse>>.Success(users);
+            if (!string.IsNullOrEmpty(query.Email))
+            {
+                var normalizedEmail = NormalizeEmail(query.Email);
+
+                users = users.Where(u => string.Equals(u.Email, normalizedEmail));
+            }
+
+            if (!string.IsNullOrEmpty(query.Role))
+            {
+                users = users.Where(u => string.Equals(u.Role, query.Role));
+            }
+
+            var result = await users.Select(u => new UserResponse(u.Id, u.Email, u.Role)).ToListAsync();
+
+            return Result<List<UserResponse>>.Success(result);
         }
 
-        public async Task<Result<UserResponse>> GetUserAsync(string email)
+        public async Task<Result<UserResponse>> GetUserAsync(Guid id)
         {
-            var normalizedEmail = NormalizeEmail(email);
-
             var user = await _dbContext.Users
                 .AsNoTracking()
-                .FirstOrDefaultAsync(u => string.Equals(u.Email, normalizedEmail));
+                .FirstOrDefaultAsync(u => string.Equals(u.Id, id));
 
             if (user is null)
             {
