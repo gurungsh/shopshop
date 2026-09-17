@@ -1,11 +1,11 @@
 ﻿namespace Identity.Infrastructure.Models
 {
-    public class ApplicationUser
+    public class User
     {
         public Guid Id { get; set; } = Guid.NewGuid();
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
-        public string Role { get; set; }
+        public string? Role { get; set; }
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     }
 }

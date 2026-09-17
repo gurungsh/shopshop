@@ -3,7 +3,7 @@ using Identity.Api.DTOs;
 
 namespace Identity.Api.Validatiors
 {
-    public class LoginRequestValidator:AbstractValidator<LoginRequest>
+    public class LoginRequestValidator : AbstractValidator<LoginRequest>
     {
         public LoginRequestValidator()
         {
