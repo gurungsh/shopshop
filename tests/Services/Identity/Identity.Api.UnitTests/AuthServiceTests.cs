@@ -22,7 +22,7 @@ namespace Identity.Api.UnitTests
         private readonly Mock<IPasswordHasher<User>> _mockHasher;
         private readonly JwtOptions _jwtSettings;
         private readonly Mock<ILogger<AuthService>> _mockLogger;
-        
+
         public AuthServiceTests()
         {
             var options = new DbContextOptionsBuilder<IdentityDbContext>()
@@ -545,7 +545,7 @@ namespace Identity.Api.UnitTests
             await _dbContext.SaveChangesAsync();
 
             // Act
-            var result = await _authService.GetUsersAsync();
+            var result = await _authService.GetUsersAsync(new UserQuery());
 
             // Assert
             Assert.True(result.IsSuccess);
@@ -560,7 +560,7 @@ namespace Identity.Api.UnitTests
         public async Task GetUsersAsync_WithNoUsers_ShouldReturnEmptyList()
         {
             // Act
-            var result = await _authService.GetUsersAsync();
+            var result = await _authService.GetUsersAsync(new UserQuery());
 
             // Assert
             Assert.True(result.IsSuccess);
@@ -573,7 +573,7 @@ namespace Identity.Api.UnitTests
         #region GetUserAsync Tests
 
         [Fact]
-        public async Task GetUserAsync_WithValidEmail_ShouldReturnUser()
+        public async Task GetUserAsync_WithValidId_ShouldReturnUser()
         {
             // Arrange
             var user = new User
@@ -586,20 +586,21 @@ namespace Identity.Api.UnitTests
             await _dbContext.SaveChangesAsync();
 
             // Act
-            var result = await _authService.GetUserAsync("test@example.com");
+            var result = await _authService.GetUserAsync(user.Id);
 
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
+            Assert.Equal(user.Id, result.Value.Id);
             Assert.Equal("test@example.com", result.Value.Email);
             Assert.Equal(Roles.Customer, result.Value.Role);
         }
 
         [Fact]
-        public async Task GetUserAsync_WithInvalidEmail_ShouldReturnNotFoundError()
+        public async Task GetUserAsync_WithInvalidId_ShouldReturnNotFoundError()
         {
             // Act
-            var result = await _authService.GetUserAsync("nonexistent@example.com");
+            var result = await _authService.GetUserAsync(Guid.NewGuid());
 
             // Assert
             Assert.False(result.IsSuccess);
@@ -608,7 +609,7 @@ namespace Identity.Api.UnitTests
         }
 
         [Fact]
-        public async Task GetUserAsync_WithCaseInsensitiveEmail_ShouldFindUser()
+        public async Task GetUsersAsync_WithEmail_ShouldReturnMatchingUser()
         {
             // Arrange
             var user = new User
@@ -617,15 +618,59 @@ namespace Identity.Api.UnitTests
                 PasswordHash = "hashed_password",
                 Role = Roles.Customer
             };
+
             _dbContext.Users.Add(user);
             await _dbContext.SaveChangesAsync();
 
             // Act
-            var result = await _authService.GetUserAsync("Test@Example.COM");
+            var result = await _authService.GetUsersAsync(
+                new UserQuery(Email: "test@example.com"));
 
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
+            Assert.Single(result.Value);
+            Assert.Equal(user.Id, result.Value[0].Id);
+            Assert.Equal("test@example.com", result.Value[0].Email);
+            Assert.Equal(Roles.Customer, result.Value[0].Role);
+        }
+
+        [Fact]
+        public async Task GetUsersAsync_WithInvalidEmail_ShouldReturnEmptyList()
+        {
+            // Act
+            var result = await _authService.GetUsersAsync(
+                new UserQuery(Email: "nonexistent@example.com"));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.Value);
+            Assert.Empty(result.Value);
+        }
+
+        [Fact]
+        public async Task GetUsersAsync_WithCaseInsensitiveEmail_ShouldFindUser()
+        {
+            // Arrange
+            var user = new User
+            {
+                Email = "test@example.com",
+                PasswordHash = "hashed_password",
+                Role = Roles.Customer
+            };
+
+            _dbContext.Users.Add(user);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _authService.GetUsersAsync(
+                new UserQuery(Email: "Test@Example.COM"));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.Value);
+            Assert.Single(result.Value);
+            Assert.Equal(user.Id, result.Value[0].Id);
         }
 
         #endregion
