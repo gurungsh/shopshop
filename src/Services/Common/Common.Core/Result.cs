@@ -1,4 +1,4 @@
-﻿namespace Identity.Api.Common
+﻿namespace Common.Core
 {
     public class Result<T>
     {

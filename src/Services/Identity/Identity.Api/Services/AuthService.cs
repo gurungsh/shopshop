@@ -1,6 +1,7 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Common.Core;
 using Identity.Api.Common;
 using Identity.Api.Constants;
 using Identity.Api.DTOs;
@@ -16,14 +17,14 @@ namespace Identity.Api.Services
     public class AuthService : IAuthService
     {
         private readonly IdentityDbContext _dbContext;
-        private readonly IPasswordHasher<ApplicationUser> _hasher;
-        private readonly JwtSettings _jwtSettings;
+        private readonly IPasswordHasher<User> _hasher;
+        private readonly JwtOptions _jwtSettings;
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
             IdentityDbContext db,
-            IPasswordHasher<ApplicationUser> hasher,
-            IOptions<JwtSettings> jwtOptions,
+            IPasswordHasher<User> hasher,
+            IOptions<JwtOptions> jwtOptions,
             ILogger<AuthService> logger)
         {
             _dbContext = db;
@@ -45,7 +46,7 @@ namespace Identity.Api.Services
                 return Result<AuthResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
             }
 
-            var user = new ApplicationUser
+            var user = new User
             {
                 Email = normalizedEmail,
                 Role = Roles.Customer
@@ -222,7 +223,7 @@ namespace Identity.Api.Services
                 return Result<UserResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
             }
 
-            var user = new ApplicationUser
+            var user = new User
             {
                 Email = normalizedEmail,
                 Role = request.Role
@@ -289,7 +290,7 @@ namespace Identity.Api.Services
             return Result<bool>.Success(true);
         }
 
-        private string GenerateJwtToken(ApplicationUser user)
+        private string GenerateJwtToken(User user)
         {
             _logger.LogDebug("Generating JWT token for user: {Email}", user.Email);
 

@@ -1,5 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Common.Core;
 using Identity.Api.Common;
 using Identity.Api.Constants;
 using Identity.Api.DTOs;
@@ -18,8 +19,8 @@ namespace Identity.Api.UnitTests
     {
         private readonly AuthService _authService;
         private readonly IdentityDbContext _dbContext;
-        private readonly Mock<IPasswordHasher<ApplicationUser>> _mockHasher;
-        private readonly JwtSettings _jwtSettings;
+        private readonly Mock<IPasswordHasher<User>> _mockHasher;
+        private readonly JwtOptions _jwtSettings;
         private readonly Mock<ILogger<AuthService>> _mockLogger;
         
         public AuthServiceTests()
@@ -29,10 +30,10 @@ namespace Identity.Api.UnitTests
                 .Options;
 
             _dbContext = new IdentityDbContext(options);
-            _mockHasher = new Mock<IPasswordHasher<ApplicationUser>>();
+            _mockHasher = new Mock<IPasswordHasher<User>>();
             _mockLogger = new Mock<ILogger<AuthService>>();
 
-            _jwtSettings = new JwtSettings
+            _jwtSettings = new JwtOptions
             {
                 Secret = "ThisIsAVeryLongSecretKeyForJwtTokenSigningPurposesOnly1234567890",
                 ExpirationInMinutes = 60,
@@ -54,7 +55,7 @@ namespace Identity.Api.UnitTests
             var hashedPassword = "hashed_password_123";
 
             _mockHasher
-                .Setup(h => h.HashPassword(It.IsAny<ApplicationUser>(), request.Password))
+                .Setup(h => h.HashPassword(It.IsAny<User>(), request.Password))
                 .Returns(hashedPassword);
 
             // Act
@@ -85,7 +86,7 @@ namespace Identity.Api.UnitTests
         public async Task RegisterAsync_WithDuplicateEmail_ShouldReturnConflictError()
         {
             // Arrange
-            _dbContext.Users.Add(new ApplicationUser
+            _dbContext.Users.Add(new User
             {
                 Email = "duplicate@example.com",
                 PasswordHash = "existing_hash",
@@ -108,7 +109,7 @@ namespace Identity.Api.UnitTests
         public async Task RegisterAsync_WithCaseInsensitiveEmail_ShouldPreventDuplicate()
         {
             // Arrange
-            _dbContext.Users.Add(new ApplicationUser
+            _dbContext.Users.Add(new User
             {
                 Email = "test@example.com",
                 PasswordHash = "existing_hash",
@@ -135,7 +136,7 @@ namespace Identity.Api.UnitTests
         {
             // Arrange
             var password = "Test@123";
-            var user = new ApplicationUser
+            var user = new User
             {
                 Email = "test@example.com",
                 PasswordHash = "hashed_password",
@@ -147,7 +148,7 @@ namespace Identity.Api.UnitTests
             var request = new LoginRequest("test@example.com", password);
 
             _mockHasher
-                .Setup(h => h.VerifyHashedPassword(It.IsAny<ApplicationUser>(), user.PasswordHash, password))
+                .Setup(h => h.VerifyHashedPassword(It.IsAny<User>(), user.PasswordHash, password))
                 .Returns(PasswordVerificationResult.Success);
 
             // Act
@@ -180,7 +181,7 @@ namespace Identity.Api.UnitTests
         public async Task LoginAsync_WithInvalidPassword_ShouldReturnUnauthorizedError()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Email = "test@example.com",
                 PasswordHash = "hashed_password",
@@ -192,7 +193,7 @@ namespace Identity.Api.UnitTests
             var request = new LoginRequest("test@example.com", "WrongPassword");
 
             _mockHasher
-                .Setup(h => h.VerifyHashedPassword(It.IsAny<ApplicationUser>(), user.PasswordHash, "WrongPassword"))
+                .Setup(h => h.VerifyHashedPassword(It.IsAny<User>(), user.PasswordHash, "WrongPassword"))
                 .Returns(PasswordVerificationResult.Failed);
 
             // Act
@@ -209,7 +210,7 @@ namespace Identity.Api.UnitTests
         {
             // Arrange
             var password = "Test@123";
-            var user = new ApplicationUser
+            var user = new User
             {
                 Email = "test@example.com",
                 PasswordHash = "old_hashed_password",
@@ -222,11 +223,11 @@ namespace Identity.Api.UnitTests
             var newHashedPassword = "new_hashed_password";
 
             _mockHasher
-                .Setup(h => h.VerifyHashedPassword(It.IsAny<ApplicationUser>(), user.PasswordHash, password))
+                .Setup(h => h.VerifyHashedPassword(It.IsAny<User>(), user.PasswordHash, password))
                 .Returns(PasswordVerificationResult.SuccessRehashNeeded);
 
             _mockHasher
-                .Setup(h => h.HashPassword(It.IsAny<ApplicationUser>(), password))
+                .Setup(h => h.HashPassword(It.IsAny<User>(), password))
                 .Returns(newHashedPassword);
 
             // Act
@@ -245,7 +246,7 @@ namespace Identity.Api.UnitTests
         {
             // Arrange
             var password = "Test@123";
-            var user = new ApplicationUser
+            var user = new User
             {
                 Email = "test@example.com",
                 PasswordHash = "hashed_password",
@@ -257,7 +258,7 @@ namespace Identity.Api.UnitTests
             var request = new LoginRequest("Test@Example.COM", password);
 
             _mockHasher
-                .Setup(h => h.VerifyHashedPassword(It.IsAny<ApplicationUser>(), user.PasswordHash, password))
+                .Setup(h => h.VerifyHashedPassword(It.IsAny<User>(), user.PasswordHash, password))
                 .Returns(PasswordVerificationResult.Success);
 
             // Act
@@ -275,7 +276,7 @@ namespace Identity.Api.UnitTests
         public async Task GetCurrentUserAsync_WithValidPrincipal_ShouldReturnUser()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "test@example.com",
@@ -343,7 +344,7 @@ namespace Identity.Api.UnitTests
         public async Task GetCurrentUserAsync_WithNameIdentifierClaim_ShouldWork()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "test@example.com",
@@ -376,7 +377,7 @@ namespace Identity.Api.UnitTests
         public async Task UpdateCurrentUserAsync_WithValidData_ShouldUpdateUser()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "test@example.com",
@@ -412,7 +413,7 @@ namespace Identity.Api.UnitTests
         public async Task UpdateCurrentUserAsync_WithPassword_ShouldUpdatePassword()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "test@example.com",
@@ -427,7 +428,7 @@ namespace Identity.Api.UnitTests
             var request = new UpdateCurrentUserRequest("test@example.com", newPassword);
 
             _mockHasher
-                .Setup(h => h.HashPassword(It.IsAny<ApplicationUser>(), newPassword))
+                .Setup(h => h.HashPassword(It.IsAny<User>(), newPassword))
                 .Returns(newHashedPassword);
 
             var claims = new List<Claim>
@@ -452,14 +453,14 @@ namespace Identity.Api.UnitTests
         public async Task UpdateCurrentUserAsync_WithDuplicateEmail_ShouldReturnConflictError()
         {
             // Arrange
-            var user1 = new ApplicationUser
+            var user1 = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "user1@example.com",
                 PasswordHash = "hashed_password",
                 Role = Roles.Customer
             };
-            var user2 = new ApplicationUser
+            var user2 = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "user2@example.com",
@@ -536,9 +537,9 @@ namespace Identity.Api.UnitTests
             // Arrange
             var users = new[]
             {
-                new ApplicationUser { Email = "user1@example.com", PasswordHash = "hash1", Role = Roles.Admin },
-                new ApplicationUser { Email = "user2@example.com", PasswordHash = "hash2", Role = Roles.Customer },
-                new ApplicationUser { Email = "user3@example.com", PasswordHash = "hash3", Role = Roles.Customer }
+                new User { Email = "user1@example.com", PasswordHash = "hash1", Role = Roles.Admin },
+                new User { Email = "user2@example.com", PasswordHash = "hash2", Role = Roles.Customer },
+                new User { Email = "user3@example.com", PasswordHash = "hash3", Role = Roles.Customer }
             };
             _dbContext.Users.AddRange(users);
             await _dbContext.SaveChangesAsync();
@@ -575,7 +576,7 @@ namespace Identity.Api.UnitTests
         public async Task GetUserAsync_WithValidEmail_ShouldReturnUser()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Email = "test@example.com",
                 PasswordHash = "hashed_password",
@@ -610,7 +611,7 @@ namespace Identity.Api.UnitTests
         public async Task GetUserAsync_WithCaseInsensitiveEmail_ShouldFindUser()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Email = "test@example.com",
                 PasswordHash = "hashed_password",
@@ -639,7 +640,7 @@ namespace Identity.Api.UnitTests
             var hashedPassword = "hashed_password";
 
             _mockHasher
-                .Setup(h => h.HashPassword(It.IsAny<ApplicationUser>(), request.Password))
+                .Setup(h => h.HashPassword(It.IsAny<User>(), request.Password))
                 .Returns(hashedPassword);
 
             // Act
@@ -675,7 +676,7 @@ namespace Identity.Api.UnitTests
         public async Task CreateUserAsync_WithDuplicateEmail_ShouldReturnConflictError()
         {
             // Arrange
-            _dbContext.Users.Add(new ApplicationUser
+            _dbContext.Users.Add(new User
             {
                 Email = "duplicate@example.com",
                 PasswordHash = "existing_hash",
@@ -701,7 +702,7 @@ namespace Identity.Api.UnitTests
             var request = new AdminCreateUserRequest("admin@example.com", "Password@123", Roles.Admin);
 
             _mockHasher
-                .Setup(h => h.HashPassword(It.IsAny<ApplicationUser>(), It.IsAny<string>()))
+                .Setup(h => h.HashPassword(It.IsAny<User>(), It.IsAny<string>()))
                 .Returns("hashed_password");
 
             // Act
@@ -720,7 +721,7 @@ namespace Identity.Api.UnitTests
         public async Task UpdateUserAsync_WithValidRequest_ShouldUpdateUser()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "test@example.com",
@@ -767,14 +768,14 @@ namespace Identity.Api.UnitTests
         public async Task UpdateUserAsync_WithDuplicateEmail_ShouldReturnConflictError()
         {
             // Arrange
-            var user1 = new ApplicationUser
+            var user1 = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "user1@example.com",
                 PasswordHash = "hashed_password",
                 Role = Roles.Customer
             };
-            var user2 = new ApplicationUser
+            var user2 = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "user2@example.com",
@@ -803,7 +804,7 @@ namespace Identity.Api.UnitTests
         public async Task DeleteUserAsync_WithValidUser_ShouldDeleteUser()
         {
             // Arrange
-            var user = new ApplicationUser
+            var user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "test@example.com",
