@@ -28,6 +28,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Common\Common.Core\Common.Core.csproj" />
+    <ProjectReference Include="..\..\Common\Common.Web\Common.Web\Common.Web.csproj" />
     <ProjectReference Include="..\Identity.Infrastructure\Identity.Infrastructure.csproj" />
   </ItemGroup>
 

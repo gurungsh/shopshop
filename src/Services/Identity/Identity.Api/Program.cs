@@ -31,8 +31,8 @@ try
 
     // Configuration and options
     var jwtSettings = builder.Configuration
-        .GetSection(JwtSettings.SectionName)
-        .Get<JwtSettings>()
+        .GetSection(JwtOptions.SectionName)
+        .Get<JwtOptions>()
         ?? throw new InvalidOperationException("JwtSettings configuration is missing.");
 
     if (string.IsNullOrWhiteSpace(jwtSettings.Secret) || jwtSettings.Secret.Length < 32)
@@ -40,8 +40,8 @@ try
         throw new InvalidOperationException("JWT Secret is missing or too short. It must be at least 32 characters long.");
     }
 
-    builder.Services.Configure<JwtSettings>(
-        builder.Configuration.GetSection(JwtSettings.SectionName));
+    builder.Services.Configure<JwtOptions>(
+        builder.Configuration.GetSection(JwtOptions.SectionName));
 
     // Infrastructure and database services
     var connectionString = builder.Configuration.GetConnectionString("AuthDb");
