@@ -1,6 +1,5 @@
 ﻿using System.Security.Claims;
 using Common.Core;
-using Identity.Api.Common;
 using Identity.Api.DTOs;
 
 namespace Identity.Api.Services
@@ -13,8 +12,8 @@ namespace Identity.Api.Services
         Task<Result<bool>> LogoutAsync(ClaimsPrincipal principal);
         Task<Result<UserResponse>> GetCurrentUserAsync(ClaimsPrincipal principal);
         Task<Result<UserResponse>> UpdateCurrentUserAsync(ClaimsPrincipal principal, UpdateCurrentUserRequest request);
-        Task<Result<List<UserResponse>>> GetUsersAsync();
-        Task<Result<UserResponse>> GetUserAsync(string email);
+        Task<Result<List<UserResponse>>> GetUsersAsync(UserQuery query);
+        Task<Result<UserResponse>> GetUserAsync(Guid id);
         Task<Result<UserResponse>> CreateUserAsync(AdminCreateUserRequest request);
         Task<Result<UserResponse>> UpdateUserAsync(Guid id, AdminUpdateUserRequest request);
         Task<Result<bool>> DeleteUserAsync(Guid id);
