@@ -78,7 +78,7 @@ try
     builder.Services.AddAuthorization();
 
     // Application business services
-    builder.Services.AddScoped<IPasswordHasher<ApplicationUser>, PasswordHasher<ApplicationUser>>();
+    builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
     builder.Services.AddScoped<IAuthService, AuthService>();
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 

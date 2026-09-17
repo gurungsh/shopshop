@@ -55,7 +55,7 @@ GET    /api/users/me
 PUT    /api/users/me
 
 GET    /api/admin/users
-GET    /api/admin/users/{email}
+GET    /api/admin/users/{id}
 POST   /api/admin/users
 PUT    /api/admin/users/{id}
 DELETE /api/admin/users/{id}
@@ -114,7 +114,7 @@ GET   /api/orders
 GET   /api/orders/{id} 
 
 GET   /api/admin/orders 
-GET   /api/admin/orders/{id} 
+GET   /api/admin/orders/{id}
 PUT   /api/admin/orders/{id}/status
 POST  /api/admin/orders/{id}/cancel 
 ```

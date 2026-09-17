@@ -18,9 +18,10 @@ public static class AdminUserEndpoints
 
         // GET /api/admin/users
         group.MapGet("", async (
+            UserQuery query,
             IAuthService authService) =>
         {
-            var result = await authService.GetUsersAsync();
+            var result = await authService.GetUsersAsync(query);
 
             return result.IsSuccess
                 ? Results.Ok(result.Value)
@@ -28,12 +29,12 @@ public static class AdminUserEndpoints
         })
         .WithName("GetUsers");
 
-        // GET /api/admin/users/{email}
-        group.MapGet("/{email}", async (
-            string email,
+        // GET /api/admin/users/{id}
+        group.MapGet("/{id}", async (
+            Guid id,
             IAuthService authService) =>
         {
-            var result = await authService.GetUserAsync(email);
+            var result = await authService.GetUserAsync(id);
 
             return result.IsSuccess
                 ? Results.Ok(result.Value)
