@@ -23,6 +23,9 @@
   </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Services/" />
+  <Folder Name="/tests/Services/Catalog/">
+    <Project Path="tests/Services/Catalog/Catalog.Api.UnitTests/Catalog.Api.UnitTests.csproj" Id="a5d30c12-3643-497a-83f8-4e50dae70833" />
+  </Folder>
   <Folder Name="/tests/Services/Identity/">
     <Project Path="tests/Services/Identity/Identity.Api.UnitTests/Identity.Api.UnitTests.csproj" />
   </Folder>
