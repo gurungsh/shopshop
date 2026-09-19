@@ -1,8 +1,8 @@
 ﻿namespace Catalog.Api.DTOs
 {
     public sealed record CategoryQuery(
-        string? Name,
-        string? Description);
+        string? Name = null,
+        string? Description = null);
     public sealed record CategoryResponse(
         Guid Id,
         string Name,
