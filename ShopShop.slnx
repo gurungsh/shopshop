@@ -5,6 +5,10 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Catalog/">
+    <Project Path="src/Services/Catalog/Catalog.Api/Catalog.Api.csproj" Id="d7599715-e4b0-4ea6-b31b-be7e5db01457" />
+    <Project Path="src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj" Id="0e97ad64-63f9-4f5b-b8a8-fd3c16d59baf" />
+  </Folder>
   <Folder Name="/src/Services/Common/">
     <Project Path="src/Services/Common/Common.Core/Common.Core.csproj" Id="3e98096a-d86b-40bb-a7de-e8c24f382f57" />
     <Project Path="src/Services/Common/Common.Web/Common.Web/Common.Web.csproj" Id="e58150e1-88fe-479c-b1b0-266f5dadb341" />
