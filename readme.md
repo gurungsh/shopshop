@@ -68,17 +68,12 @@ DELETE /api/admin/users/{id}
 Owns:
 
 * Products
-* Services
 * Categories
 * Pricing
-* Product availability
 
 ```text
 GET    /api/products 
 GET    /api/products/{id} 
-
-GET    /api/services 
-GET    /api/services/{id} 
 
 GET    /api/categories 
 GET    /api/categories/{id} 
@@ -86,10 +81,6 @@ GET    /api/categories/{id}
 POST   /api/admin/products 
 PUT    /api/admin/products/{id} 
 DELETE /api/admin/products/{id} 
-
-POST   /api/admin/services 
-PUT    /api/admin/services/{id} 
-DELETE /api/admin/services/{id} 
 
 POST   /api/admin/categories 
 PUT    /api/admin/categories/{id} 
