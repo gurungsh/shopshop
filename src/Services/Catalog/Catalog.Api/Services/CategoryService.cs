@@ -54,6 +54,7 @@ namespace Catalog.Api.Services
 
             if (category is null)
             {
+                _logger.LogWarning("Category not found. Category Id:{CategoryId}", id);
                 return Result<CategoryResponse>.Failure("Category not found.", ResultErrorType.NotFound);
             }
 
@@ -76,6 +77,8 @@ namespace Catalog.Api.Services
 
             _dbContext.Categories.Add(category);
             await _dbContext.SaveChangesAsync();
+            
+            _logger.LogInformation("Category created. Category Id:{CategoryId}, Name:{Name}", category.Id, category.Name);
 
             return Result<CategoryResponse>.Success(new CategoryResponse(
                 category.Id,
@@ -93,6 +96,7 @@ namespace Catalog.Api.Services
 
             if (category is null)
             {
+                _logger.LogWarning("Category not found. Category Id:{CategoryId}", id);
                 return Result<CategoryResponse>.Failure("Category not found.", ResultErrorType.NotFound);
             }
 
@@ -114,6 +118,8 @@ namespace Catalog.Api.Services
             category.UpdatedAtUtc = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync();
+            
+            _logger.LogInformation("Category updated. Category Id:{CategoryId}", category.Id);
 
             return Result<CategoryResponse>.Success(new CategoryResponse(
                 category.Id,
@@ -131,17 +137,16 @@ namespace Catalog.Api.Services
 
             if (category is null)
             {
+                _logger.LogWarning("Category not found. Category Id:{CategoryId}", id);
                 return Result<bool>.Failure("Category not found.", ResultErrorType.NotFound);
             }
 
             _dbContext.Categories.Remove(category);
-
             await _dbContext.SaveChangesAsync();
 
             _logger.LogInformation("Category deleted. Category Id:{CategoryId}", id);
 
             return Result<bool>.Success(true);
         }
-
     }
 }
