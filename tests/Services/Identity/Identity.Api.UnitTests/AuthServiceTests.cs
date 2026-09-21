@@ -1,16 +1,15 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Common.Core;
-using Identity.Api.Common;
-using Identity.Api.Constants;
 using Identity.Api.DTOs;
+using Identity.Api.Options;
 using Identity.Api.Services;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using OptionsFactory = Microsoft.Extensions.Options.Options;
 using Moq;
 
 namespace Identity.Api.UnitTests
@@ -41,7 +40,7 @@ namespace Identity.Api.UnitTests
                 Audience = "ShopShopClient"
             };
 
-            var jwtOptionsWrapper = Options.Create(_jwtSettings);
+            var jwtOptionsWrapper = OptionsFactory.Create(_jwtSettings);
             _authService = new AuthService(_dbContext, _mockHasher.Object, jwtOptionsWrapper, _mockLogger.Object);
         }
 
