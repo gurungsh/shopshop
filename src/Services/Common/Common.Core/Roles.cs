@@ -1,4 +1,4 @@
-﻿namespace Identity.Api.Constants
+﻿namespace Common.Core
 {
     public static class Roles
     {
