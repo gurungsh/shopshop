@@ -43,7 +43,7 @@ public static class UserEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("UpdateCurrentUser")
-        .AddEndpointFilter<ValidationFilter<UpdateUserRequest>>();
+        .AddEndpointFilter<ValidationFilter<UpdateCurrentUserRequest>>();
 
         return app;
     }

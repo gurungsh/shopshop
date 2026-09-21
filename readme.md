@@ -54,7 +54,7 @@ POST   /api/auth/logout
 GET    /api/users/me
 PUT    /api/users/me
 
-GET    /api/admin/users
+POST   /api/admin/users/search
 GET    /api/admin/users/{id}
 POST   /api/admin/users
 PUT    /api/admin/users/{id}
@@ -72,7 +72,7 @@ Owns:
 * Pricing
 
 ```text
-GET    /api/products 
+POST   /api/products 
 GET    /api/products/{id} 
 
 GET    /api/categories 

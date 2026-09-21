@@ -1,12 +1,12 @@
 using System.Text;
 using FluentValidation;
-using Identity.Api.Common;
 using Identity.Api.Endpoints;
+using Identity.Api.Options;
 using Identity.Api.Services;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -37,14 +37,16 @@ try
 
     if (string.IsNullOrWhiteSpace(jwtSettings.Secret) || jwtSettings.Secret.Length < 32)
     {
-        throw new InvalidOperationException("JWT Secret is missing or too short. It must be at least 32 characters long.");
+        throw new InvalidOperationException("JWT Secret is missing or invalid.");
     }
 
     builder.Services.Configure<JwtOptions>(
         builder.Configuration.GetSection(JwtOptions.SectionName));
 
     // Infrastructure and database services
-    var connectionString = builder.Configuration.GetConnectionString("AuthDb");
+    var connectionString = builder.Configuration.GetConnectionString("AuthDb")
+        ?? throw new InvalidOperationException("Connection string 'AuthDb' is missing.");
+
     builder.Services.AddDbContext<IdentityDbContext>(options =>
         options.UseNpgsql(connectionString));
 
@@ -57,7 +59,7 @@ try
             {
                 OnAuthenticationFailed = context =>
                 {
-                    Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+                    Log.Warning(context.Exception, "JWT authentication failed.");
                     return Task.CompletedTask;
                 }
             };
@@ -92,7 +94,6 @@ try
             Version = "v1"
         });
 
-        // Add JWT Bearer Security Definition
         var securityScheme = new OpenApiSecurityScheme
         {
             Name = "Authorization",
@@ -111,19 +112,24 @@ try
         });
     });
 
-    builder.Services.AddHttpLogging(options =>
-    {
-        options.LoggingFields = HttpLoggingFields.RequestPath
-            | HttpLoggingFields.RequestMethod
-            | HttpLoggingFields.RequestQuery
-            | HttpLoggingFields.ResponseStatusCode
-            | HttpLoggingFields.Duration;
-    });
-
     var app = builder.Build();
 
     // Request logging early in the pipeline
-    app.UseHttpLogging();
+    app.UseSerilogRequestLogging();
+
+    // Global exception handling 
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            var exceptionFeature = context.Features.Get<IExceptionHandlerFeature>();
+            Log.Error(exceptionFeature?.Error, "Unhandled exception occurred.");
+
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred." });
+        });
+    });
 
     // Development tooling
     if (app.Environment.IsDevelopment())
@@ -134,12 +140,16 @@ try
         {
             options.SwaggerEndpoint("/swagger/v1/swagger.json", "Identity API v1");
         });
+
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        await dbContext.Database.MigrateAsync();
     }
 
     // Security middleware - HTTPS redirect
     app.UseHttpsRedirection();
 
-    // Security middleware - Authentication & Authorization
+    // Security middleware - Authentication and Authorization
     app.UseAuthentication();
     app.UseAuthorization();
 
