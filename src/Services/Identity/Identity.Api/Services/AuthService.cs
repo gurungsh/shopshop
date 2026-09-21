@@ -223,8 +223,8 @@ namespace Identity.Api.Services
             }
 
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-            var existingUser = await _dbContext.Users.AnyAsync(u => string.Equals(u.Email.ToLowerInvariant(), normalizedEmail));
+            
+            var existingUser = await _dbContext.Users.AnyAsync(u => string.Equals(u.Email, normalizedEmail));
             if (existingUser)
             {
                 _logger.LogWarning("User with this email already exists. {Email}", request.Email);

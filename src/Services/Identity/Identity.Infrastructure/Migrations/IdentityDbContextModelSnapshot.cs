@@ -42,6 +42,9 @@ namespace Identity.Infrastructure.Migrations
                     b.Property<string>("Role")
                         .HasColumnType("text");
 
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
