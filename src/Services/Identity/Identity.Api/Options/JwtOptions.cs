@@ -1,4 +1,4 @@
-﻿namespace Identity.Api.Common
+﻿namespace Identity.Api.Options
 {
     public record JwtOptions
     {

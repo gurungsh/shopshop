@@ -2,9 +2,8 @@
 using System.Security.Claims;
 using System.Text;
 using Common.Core;
-using Identity.Api.Common;
-using Identity.Api.Constants;
 using Identity.Api.DTOs;
+using Identity.Api.Options;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
