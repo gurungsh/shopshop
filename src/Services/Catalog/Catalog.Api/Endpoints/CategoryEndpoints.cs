@@ -12,8 +12,8 @@ namespace Catalog.Api.Endpoints
             var group = app.MapGroup("api/categories")
                 .WithTags("Category");
 
-            // GET /api/categories
-            group.MapGet("", async (
+            // POST /api/categories
+            group.MapPost("", async (
                 CategoryQuery query,
                 ICategoryService categoryService) =>
             {

@@ -7,7 +7,7 @@
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Ordering\\Ordering.Api\\Ordering.Api.csproj",
+        "Path": "src\\Services\\Catalog\\Catalog.Api\\Catalog.Api.csproj",
         "Action": "Start"
       }
     ]
