@@ -16,7 +16,7 @@ namespace Identity.Api.Endpoints
             // POST /api/auth/register
             group.MapPost("/register", async (RegisterRequest request, IAuthService authService) =>
             {
-                var result = await authService.RegisterAsync(request); ;
+                var result = await authService.RegisterAsync(request);
 
                 return result.IsSuccess
                     ? Results.Created($"/api/register/{result.Value!.Id}", result.Value)
