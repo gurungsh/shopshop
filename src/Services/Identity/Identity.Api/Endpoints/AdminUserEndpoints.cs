@@ -16,8 +16,8 @@ public static class AdminUserEndpoints
                 policy.RequireRole(Roles.Admin))
             .WithTags("Admin");
 
-        // GET /api/admin/users
-        group.MapGet("", async (
+        // POST /api/admin/users/search
+        group.MapPost("/search", async (
             UserQuery query,
             IAuthService authService) =>
         {
