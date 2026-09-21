@@ -11,4 +11,6 @@ launchSettings.json
 !appsettings.Development.example.json
 .env
 *.local
+*.csproj.user
+*slnLaunc.user
 .vscode/

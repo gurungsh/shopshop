@@ -1,5 +1,5 @@
-﻿using Common.Web;
-using Identity.Api.Constants;
+﻿using Common.Core;
+using Common.Web;
 using Identity.Api.DTOs;
 using Identity.Api.Filters;
 using Identity.Api.Services;
@@ -12,8 +12,7 @@ public static class AdminUserEndpoints
         this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/users")
-            .RequireAuthorization(policy =>
-                policy.RequireRole(Roles.Admin))
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Admin))
             .WithTags("Admin");
 
         // POST /api/admin/users/search
