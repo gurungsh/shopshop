@@ -21,12 +21,12 @@ namespace Identity.Api.Services
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
-            IdentityDbContext db,
+            IdentityDbContext dbcontext,
             IPasswordHasher<User> hasher,
             IOptions<JwtOptions> jwtOptions,
             ILogger<AuthService> logger)
         {
-            _dbContext = db;
+            _dbContext = dbcontext;
             _hasher = hasher;
             _jwtSettings = jwtOptions.Value;
             _logger = logger;
