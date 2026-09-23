@@ -54,8 +54,8 @@ POST   /api/auth/logout
 GET    /api/users/me
 PUT    /api/users/me
 
-GET    /api/admin/users
-GET    /api/admin/users/{email}
+POST   /api/admin/users/search
+GET    /api/admin/users/{id}
 POST   /api/admin/users
 PUT    /api/admin/users/{id}
 DELETE /api/admin/users/{id}
@@ -68,17 +68,12 @@ DELETE /api/admin/users/{id}
 Owns:
 
 * Products
-* Services
 * Categories
 * Pricing
-* Product availability
 
 ```text
-GET    /api/products 
+POST   /api/products 
 GET    /api/products/{id} 
-
-GET    /api/services 
-GET    /api/services/{id} 
 
 GET    /api/categories 
 GET    /api/categories/{id} 
@@ -86,10 +81,6 @@ GET    /api/categories/{id}
 POST   /api/admin/products 
 PUT    /api/admin/products/{id} 
 DELETE /api/admin/products/{id} 
-
-POST   /api/admin/services 
-PUT    /api/admin/services/{id} 
-DELETE /api/admin/services/{id} 
 
 POST   /api/admin/categories 
 PUT    /api/admin/categories/{id} 
@@ -114,7 +105,7 @@ GET   /api/orders
 GET   /api/orders/{id} 
 
 GET   /api/admin/orders 
-GET   /api/admin/orders/{id} 
+GET   /api/admin/orders/{id}
 PUT   /api/admin/orders/{id}/status
 POST  /api/admin/orders/{id}/cancel 
 ```

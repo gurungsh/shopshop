@@ -1,10 +1,10 @@
 using System.Text;
 using FluentValidation;
-using Identity.Api.Endpoints;
-using Identity.Api.Options;
-using Identity.Api.Services;
-using Identity.Infrastructure.Data;
-using Identity.Infrastructure.Models;
+using Catalog.Api.Options;
+using Catalog.Api.Endpoints;
+using Catalog.Api.Services;
+using Catalog.Infrastructure.Data;
+using Catalog.Infrastructure.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
@@ -20,14 +20,14 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("Starting Identity.Api application.");
+    Log.Information("Starting Catalog.Api application.");
 
     var builder = WebApplication.CreateBuilder(args);
 
     // Serilog
     builder.Host.UseSerilog((context, services, configuration) => configuration
-        .ReadFrom.Configuration(context.Configuration)
-        .ReadFrom.Services(services));
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services));
 
     // Configuration and options
     var jwtSettings = builder.Configuration
@@ -35,7 +35,7 @@ try
         .Get<JwtOptions>()
         ?? throw new InvalidOperationException("JwtSettings configuration is missing.");
 
-    if (string.IsNullOrWhiteSpace(jwtSettings.Secret) || jwtSettings.Secret.Length < 32)
+    if (string.IsNullOrEmpty(jwtSettings.Secret) || jwtSettings.Secret.Length < 32)
     {
         throw new InvalidOperationException("JWT Secret is missing or invalid.");
     }
@@ -44,13 +44,13 @@ try
         builder.Configuration.GetSection(JwtOptions.SectionName));
 
     // Infrastructure and database services
-    var connectionString = builder.Configuration.GetConnectionString("AuthDb")
-        ?? throw new InvalidOperationException("Connection string 'AuthDb' is missing.");
+    var connectionString = builder.Configuration.GetConnectionString("CatalogDb")
+        ?? throw new InvalidOperationException("Connection string 'CatalogDb' is missing.");
 
-    builder.Services.AddDbContext<IdentityDbContext>(options =>
+    builder.Services.AddDbContext<CatalogDbContext>(options =>
         options.UseNpgsql(connectionString));
 
-    // Authentication and authorization
+    // Authentcation and authorization
     builder.Services
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
@@ -79,10 +79,9 @@ try
 
     builder.Services.AddAuthorization();
 
-    // Application business services
-    builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
-    builder.Services.AddScoped<IAuthService, AuthService>();
-    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+    // Application business servicse
+    builder.Services.AddScoped<ICategoryService, CategoryService>();
+    builder.Services.AddScoped<IProductService, ProductService>();
 
     // API documentation and diagnostics
     builder.Services.AddEndpointsApiExplorer();
@@ -90,7 +89,7 @@ try
     {
         options.SwaggerDoc("v1", new OpenApiInfo
         {
-            Title = "Identity API",
+            Title = "Catalog API",
             Version = "v1"
         });
 
@@ -114,35 +113,35 @@ try
 
     var app = builder.Build();
 
-    // Request logging early in the pipeline
+    // Serilog
     app.UseSerilogRequestLogging();
 
-    // Global exception handling 
+    // Global exception handling
     app.UseExceptionHandler(errorApp =>
     {
         errorApp.Run(async context =>
         {
             var exceptionFeature = context.Features.Get<IExceptionHandlerFeature>();
-            Log.Error(exceptionFeature?.Error, "Unhandled exception occurred.");
+            Log.Error(exceptionFeature?.Error, "Unhandled exception occured.");
 
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred." });
+            await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occured." });
         });
     });
 
     // Development tooling
-    if (app.Environment.IsDevelopment())
+    if(app.Environment.IsDevelopment())
     {
         Log.Information("Running in Development environment.");
         app.UseSwagger();
         app.UseSwaggerUI(options =>
         {
-            options.SwaggerEndpoint("/swagger/v1/swagger.json", "Identity API v1");
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "Catalog API v1");
         });
 
         using var scope = app.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
         await dbContext.Database.MigrateAsync();
     }
 
@@ -153,12 +152,13 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
-    // Endpoint routing
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Identity.Api" })).WithTags("Health");
-    app.MapAdminUserEndpoints();
-    app.MapAuthEndpoints();
-    app.MapUserEndpoints();
-
+    // Endpoint routing 
+    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Catalog.Api" })).WithTags("Health");
+    app.MapCategoryEndpoints();
+    app.MapAdminCategoryEndpoints();
+    app.MapProductEndpoints();
+    app.MapAdminProductEndpoints();
+    
     Log.Information("Application pipeline configured. Running application.");
 
     app.Run();
@@ -169,6 +169,6 @@ catch (Exception ex) when (ex is not HostAbortedException)
 }
 finally
 {
-    Log.Information("Shutting down Identity.Api.");
+    Log.Information("Shutting down Catalog.Api");
     Log.CloseAndFlush();
 }

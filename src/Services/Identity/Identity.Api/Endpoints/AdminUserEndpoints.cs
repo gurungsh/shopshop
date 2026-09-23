@@ -1,5 +1,5 @@
-﻿using Common.Web;
-using Identity.Api.Constants;
+﻿using Common.Core;
+using Common.Web;
 using Identity.Api.DTOs;
 using Identity.Api.Filters;
 using Identity.Api.Services;
@@ -12,15 +12,15 @@ public static class AdminUserEndpoints
         this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/users")
-            .RequireAuthorization(policy =>
-                policy.RequireRole(Roles.Admin))
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Admin))
             .WithTags("Admin");
 
-        // GET /api/admin/users
-        group.MapGet("", async (
+        // POST /api/admin/users/search
+        group.MapPost("/search", async (
+            UserQuery query,
             IAuthService authService) =>
         {
-            var result = await authService.GetUsersAsync();
+            var result = await authService.GetUsersAsync(query);
 
             return result.IsSuccess
                 ? Results.Ok(result.Value)
@@ -28,12 +28,12 @@ public static class AdminUserEndpoints
         })
         .WithName("GetUsers");
 
-        // GET /api/admin/users/{email}
-        group.MapGet("/{email}", async (
-            string email,
+        // GET /api/admin/users/{id}
+        group.MapGet("/{id}", async (
+            Guid id,
             IAuthService authService) =>
         {
-            var result = await authService.GetUserAsync(email);
+            var result = await authService.GetUserAsync(id);
 
             return result.IsSuccess
                 ? Results.Ok(result.Value)

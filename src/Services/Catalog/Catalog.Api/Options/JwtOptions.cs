@@ -1,4 +1,4 @@
-﻿namespace Identity.Api.Options
+﻿namespace Catalog.Api.Options
 {
     public record JwtOptions
     {
@@ -9,4 +9,5 @@
         public string Audience { get; set; } = string.Empty;
         public int ExpirationInMinutes { get; set; } = 60;
     }
+
 }
