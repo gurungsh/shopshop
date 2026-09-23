@@ -21,12 +21,12 @@ namespace Identity.Api.Services
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
-            IdentityDbContext db,
+            IdentityDbContext dbcontext,
             IPasswordHasher<User> hasher,
             IOptions<JwtOptions> jwtOptions,
             ILogger<AuthService> logger)
         {
-            _dbContext = db;
+            _dbContext = dbcontext;
             _hasher = hasher;
             _jwtSettings = jwtOptions.Value;
             _logger = logger;
@@ -223,8 +223,8 @@ namespace Identity.Api.Services
             }
 
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-            var existingUser = await _dbContext.Users.AnyAsync(u => string.Equals(u.Email.ToLowerInvariant(), normalizedEmail));
+            
+            var existingUser = await _dbContext.Users.AnyAsync(u => string.Equals(u.Email, normalizedEmail));
             if (existingUser)
             {
                 _logger.LogWarning("User with this email already exists. {Email}", request.Email);
