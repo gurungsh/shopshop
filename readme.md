@@ -69,7 +69,6 @@ Owns:
 
 * Products
 * Categories
-* Pricing
 
 ```text
 POST   /api/products 
