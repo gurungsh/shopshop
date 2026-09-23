@@ -2,9 +2,8 @@
 using System.Security.Claims;
 using System.Text;
 using Common.Core;
-using Identity.Api.Common;
-using Identity.Api.Constants;
 using Identity.Api.DTOs;
+using Identity.Api.Options;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
@@ -22,12 +21,12 @@ namespace Identity.Api.Services
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
-            IdentityDbContext db,
+            IdentityDbContext dbcontext,
             IPasswordHasher<User> hasher,
             IOptions<JwtOptions> jwtOptions,
             ILogger<AuthService> logger)
         {
-            _dbContext = db;
+            _dbContext = dbcontext;
             _hasher = hasher;
             _jwtSettings = jwtOptions.Value;
             _logger = logger;
@@ -178,23 +177,32 @@ namespace Identity.Api.Services
             }
         }
 
-        public async Task<Result<List<UserResponse>>> GetUsersAsync()
+        public async Task<Result<List<UserResponse>>> GetUsersAsync(UserQuery query)
         {
-            var users = await _dbContext.Users
-                .AsNoTracking()
-                .Select(u => new UserResponse(u.Id, u.Email, u.Role))
-                .ToListAsync();
+            var users = _dbContext.Users.AsNoTracking();
 
-            return Result<List<UserResponse>>.Success(users);
+            if (!string.IsNullOrEmpty(query.Email))
+            {
+                var normalizedEmail = NormalizeEmail(query.Email);
+
+                users = users.Where(u => string.Equals(u.Email, normalizedEmail));
+            }
+
+            if (!string.IsNullOrEmpty(query.Role))
+            {
+                users = users.Where(u => string.Equals(u.Role, query.Role));
+            }
+
+            var result = await users.Select(u => new UserResponse(u.Id, u.Email, u.Role)).ToListAsync();
+
+            return Result<List<UserResponse>>.Success(result);
         }
 
-        public async Task<Result<UserResponse>> GetUserAsync(string email)
+        public async Task<Result<UserResponse>> GetUserAsync(Guid id)
         {
-            var normalizedEmail = NormalizeEmail(email);
-
             var user = await _dbContext.Users
                 .AsNoTracking()
-                .FirstOrDefaultAsync(u => string.Equals(u.Email, normalizedEmail));
+                .FirstOrDefaultAsync(u => string.Equals(u.Id, id));
 
             if (user is null)
             {
@@ -215,8 +223,8 @@ namespace Identity.Api.Services
             }
 
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-            var existingUser = await _dbContext.Users.AnyAsync(u => string.Equals(u.Email.ToLowerInvariant(), normalizedEmail));
+            
+            var existingUser = await _dbContext.Users.AnyAsync(u => string.Equals(u.Email, normalizedEmail));
             if (existingUser)
             {
                 _logger.LogWarning("User with this email already exists. {Email}", request.Email);
