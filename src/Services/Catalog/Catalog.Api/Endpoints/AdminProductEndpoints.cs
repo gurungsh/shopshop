@@ -1,4 +1,5 @@
 ﻿using Catalog.Api.DTOs;
+using Catalog.Api.Filters;
 using Catalog.Api.Services;
 using Common.Core;
 using Common.Web;
@@ -28,7 +29,8 @@ namespace Catalog.Api.Endpoints
                     : EndpointResults.ToHttpResult(result);
 
             })
-            .WithName("CreateProduct");
+            .WithName("CreateProduct")
+            .AddEndpointFilter<ValidationFilter<AdminCreateProductRequest>>();
 
             // PUT /api/admin/products/{id}
             group.MapPut("/{id:guid}", async (
@@ -43,7 +45,8 @@ namespace Catalog.Api.Endpoints
                     : EndpointResults.ToHttpResult(result);
 
             })
-            .WithName("UpdateProduct");
+            .WithName("UpdateProduct")
+            .AddEndpointFilter<ValidationFilter<AdminUpdateProductRequest>>();
 
             // DELETE /api/admin/products/{id}
             group.MapDelete("/{id:guid}", async (

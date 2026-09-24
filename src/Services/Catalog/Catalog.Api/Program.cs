@@ -82,6 +82,7 @@ try
     // Application business servicse
     builder.Services.AddScoped<ICategoryService, CategoryService>();
     builder.Services.AddScoped<IProductService, ProductService>();
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
     // API documentation and diagnostics
     builder.Services.AddEndpointsApiExplorer();
