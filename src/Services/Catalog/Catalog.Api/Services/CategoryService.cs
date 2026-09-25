@@ -23,6 +23,11 @@ namespace Catalog.Api.Services
         {
             var categories = _dbContext.Categories.AsNoTracking();
 
+            if (query.Ids?.Length > 0)
+            {
+                categories = categories.Where(c => query.Ids.Contains(c.Id));
+            }
+
             if (!string.IsNullOrWhiteSpace(query.Name))
             {
                 categories = categories.Where(c => string.Equals(c.Name, query.Name));
