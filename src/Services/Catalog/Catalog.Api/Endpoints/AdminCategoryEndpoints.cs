@@ -1,4 +1,5 @@
 ﻿using Catalog.Api.DTOs;
+using Catalog.Api.Filters;
 using Catalog.Api.Services;
 using Common.Core;
 using Common.Web;
@@ -28,7 +29,8 @@ namespace Catalog.Api.Endpoints
                     : EndpointResults.ToHttpResult(result);
 
             })
-            .WithName("CreateCategory");
+            .WithName("CreateCategory")
+            .AddEndpointFilter<ValidationFilter<AdminCreateCategoryRequest>>();
 
             // PUT /api/admin/categories/{id}
             group.MapPut("/{id:guid}", async (
@@ -43,7 +45,8 @@ namespace Catalog.Api.Endpoints
                     : EndpointResults.ToHttpResult(result);
 
             })
-            .WithName("UpdateCategory");
+            .WithName("UpdateCategory")
+            .AddEndpointFilter<ValidationFilter<AdminUpdateCategoryRequest>>();
 
             // DELETE /api/admin/categories/{id}
             group.MapDelete("/{id:guid}", async (

@@ -27,7 +27,6 @@ namespace Catalog.Infrastructure.Configurations
             builder.HasIndex(p => p.Sku)
                 .IsUnique();
 
-            // High-precision currency mapping (18 total digits, 2 decimal places)
             builder.Property(p => p.Price)
                 .IsRequired()
                 .HasPrecision(18, 2);
@@ -45,8 +44,7 @@ namespace Catalog.Infrastructure.Configurations
                 .IsRequired()
                 .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("now()");
-
-            // Foreign Key Relationship to Category
+            
             builder.HasOne<Category>()
                 .WithMany()
                 .HasForeignKey(p => p.CategoryId)
