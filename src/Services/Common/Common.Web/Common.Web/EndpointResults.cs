@@ -20,6 +20,9 @@ namespace Common.Web
                 ResultErrorType.NotFound =>
                     Results.NotFound(new { error = result.Error }),
 
+                ResultErrorType.ServiceUnavailable =>
+                    Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status503ServiceUnavailable),
+
                 _ =>
                     Results.Problem(result.Error)
             };
