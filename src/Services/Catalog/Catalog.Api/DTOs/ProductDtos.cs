@@ -7,8 +7,7 @@
         string? Description = null,
         string? Sku = null,
         decimal? MinPrice = null,
-        decimal? MaxPrice = null
-        );
+        decimal? MaxPrice = null);
     public sealed record ProductResponse(
         Guid Id,
         Guid CategoryId,

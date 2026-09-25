@@ -28,6 +28,7 @@
         BadRequest,
         Unauthorized,
         NotFound,
-        Conflict
+        Conflict,
+        ServiceUnavailable
     }
 }

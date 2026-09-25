@@ -100,10 +100,11 @@ Owns:
 
 ```text
 POST  /api/orders 
-GET   /api/orders 
+POST  /api/orders/search 
 GET   /api/orders/{id} 
+POST  /api/orders/{id}/cancel 
 
-GET   /api/admin/orders 
+POST  /api/admin/orders/search 
 GET   /api/admin/orders/{id}
 PUT   /api/admin/orders/{id}/status
 POST  /api/admin/orders/{id}/cancel 
