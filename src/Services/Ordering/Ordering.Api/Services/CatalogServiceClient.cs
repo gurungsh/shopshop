@@ -23,8 +23,8 @@ namespace Ordering.Api.Services
 
             try
             {
-                // POST /api/products is Catalog's product search endpoint
-                using var response = await _httpClient.PostAsJsonAsync("api/products", new { Ids = ids }, cancellationToken);
+                // POST /api/products/search is Catalog's product search endpoint
+                using var response = await _httpClient.PostAsJsonAsync("api/products/search",new { Ids = ids }, cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                 {
