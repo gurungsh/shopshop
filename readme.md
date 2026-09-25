@@ -71,10 +71,10 @@ Owns:
 * Categories
 
 ```text
-POST   /api/products 
+POST   /api/products/search 
 GET    /api/products/{id} 
 
-GET    /api/categories 
+POST   /api/categories/search 
 GET    /api/categories/{id} 
 
 POST   /api/admin/products 
