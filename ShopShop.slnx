@@ -29,4 +29,7 @@
   <Folder Name="/tests/Services/Identity/">
     <Project Path="tests/Services/Identity/Identity.Api.UnitTests/Identity.Api.UnitTests.csproj" />
   </Folder>
+  <Folder Name="/tests/Services/Ordering/">
+    <Project Path="tests/Services/Ordering/Ordering.Api.UnitTests/Ordering.Api.UnitTests.csproj" />
+  </Folder>
 </Solution>
