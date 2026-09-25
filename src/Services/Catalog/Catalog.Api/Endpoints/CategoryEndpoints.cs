@@ -9,11 +9,11 @@ namespace Catalog.Api.Endpoints
         public static IEndpointRouteBuilder MapCategoryEndpoints(
             this IEndpointRouteBuilder app)
         {
-            var group = app.MapGroup("api/categories")
+            var group = app.MapGroup("/api/categories")
                 .WithTags("Category");
 
-            // POST /api/categories
-            group.MapPost("", async (
+            // POST /api/categories/search
+            group.MapPost("/search", async (
                 CategoryQuery query,
                 ICategoryService categoryService) =>
             {
@@ -26,7 +26,7 @@ namespace Catalog.Api.Endpoints
             .WithName("GetCategories");
 
             // GET /api/categories/{id}
-            group.MapGet("/{id}", async (
+            group.MapGet("/{id:guid}", async (
                 Guid id,
                 ICategoryService categoryService) =>
             {
