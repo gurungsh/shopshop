@@ -130,6 +130,51 @@ namespace Catalog.Api.UnitTests
             Assert.Single(result.Value);
         }
 
+        [Fact]
+        public async Task GetCategoriesAsync_WithMatchingIdsFilter_ShouldReturnOnlySpecifiedCategories()
+        {
+            // Arrange
+            var category1 = new Category { Name = "Electronics", Description = "Gadgets" };
+            var category2 = new Category { Name = "Books", Description = "Reading material" };
+            var category3 = new Category { Name = "Clothing", Description = "Apparel" };
+            _dbContext.Categories.AddRange(category1, category2, category3);
+            await _dbContext.SaveChangesAsync();
+
+            var query = new CategoryQuery(Ids: [category1.Id, category3.Id]);
+
+            // Act
+            var result = await _categoryService.GetCategoriesAsync(query);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.Value);
+            Assert.Equal(2, result.Value.Count);
+            Assert.Contains(result.Value, c => c.Id == category1.Id);
+            Assert.Contains(result.Value, c => c.Id == category3.Id);
+        }
+
+        [Fact]
+        public async Task GetCategoriesAsync_WithIdsAndNameFilters_ShouldReturnCategoriesMatchingBoth()
+        {
+            // Arrange
+            var category1 = new Category { Name = "Electronics", Description = "Gadgets" };
+            var category2 = new Category { Name = "Books", Description = "Reading material" };
+            var category3 = new Category { Name = "Electronics", Description = "Other gadgets" };
+            _dbContext.Categories.AddRange(category1, category2, category3);
+            await _dbContext.SaveChangesAsync();
+
+            var query = new CategoryQuery(Ids: [category1.Id, category2.Id], Name: "Electronics");
+
+            // Act
+            var result = await _categoryService.GetCategoriesAsync(query);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.Value);
+            Assert.Single(result.Value);
+            Assert.Equal(category1.Id, result.Value[0].Id);
+        }
+
         #endregion
 
         #region GetCategoryAsync Tests

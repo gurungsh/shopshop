@@ -9,11 +9,11 @@ namespace Catalog.Api.Endpoints
         public static IEndpointRouteBuilder MapProductEndpoints(
             this IEndpointRouteBuilder app)
         {
-            var group = app.MapGroup("api/products")
+            var group = app.MapGroup("/api/products")
                 .WithTags("Product");
 
-            // POST /api/products
-            group.MapPost("", async (
+            // POST /api/products/search
+            group.MapPost("/search", async (
                 ProductQuery query,
                 IProductService productService) =>
             {
@@ -26,7 +26,7 @@ namespace Catalog.Api.Endpoints
             .WithName("GetProducts");
 
             // GET /api/products/{id}
-            group.MapGet("/{id}", async (
+            group.MapGet("/{id:guid}", async (
                 Guid id,
                 IProductService productService) =>
             {
