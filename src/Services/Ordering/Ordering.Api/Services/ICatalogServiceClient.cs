@@ -1,4 +1,4 @@
-using Common.Core;
+using BuildingBlocks.Core;
 
 namespace Ordering.Api.Services
 {

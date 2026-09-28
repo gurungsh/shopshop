@@ -1,6 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Common.Core;
+using BuildingBlocks.Core;
 
 namespace Ordering.Api.Extensions
 {

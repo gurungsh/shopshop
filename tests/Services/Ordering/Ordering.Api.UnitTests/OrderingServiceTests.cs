@@ -1,4 +1,4 @@
-using Common.Core;
+using BuildingBlocks.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;

@@ -1,5 +1,5 @@
-using Common.Core;
-using Common.Web;
+using BuildingBlocks.Core;
+using BuildingBlocks.Web;
 using Ordering.Api.DTOs;
 using Ordering.Api.Filters;
 using Ordering.Api.Services;

@@ -1,4 +1,4 @@
-﻿namespace Common.Core
+﻿namespace BuildingBlocks.Core
 {
     public static class Roles
     {

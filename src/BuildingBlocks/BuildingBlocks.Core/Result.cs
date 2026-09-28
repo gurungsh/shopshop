@@ -1,4 +1,4 @@
-﻿namespace Common.Core
+﻿namespace BuildingBlocks.Core
 {
     public class Result<T>
     {
@@ -20,15 +20,5 @@
 
         public static Result<T> Failure(string error, ResultErrorType errorType = ResultErrorType.BadRequest)
             => new(false, default, error, errorType);
-    }
-
-    public enum ResultErrorType
-    {
-        None,
-        BadRequest,
-        Unauthorized,
-        NotFound,
-        Conflict,
-        ServiceUnavailable
     }
 }

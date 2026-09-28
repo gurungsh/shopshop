@@ -1,4 +1,4 @@
-using Common.Core;
+using BuildingBlocks.Core;
 using Microsoft.EntityFrameworkCore;
 using Ordering.Api.DTOs;
 using Ordering.Infrastructure.Constants;

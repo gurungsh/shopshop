@@ -1,7 +1,7 @@
-﻿using Common.Core;
+﻿using BuildingBlocks.Core;
 using Microsoft.AspNetCore.Http;
 
-namespace Common.Web
+namespace BuildingBlocks.Web
 {
     public static class EndpointResults
     {

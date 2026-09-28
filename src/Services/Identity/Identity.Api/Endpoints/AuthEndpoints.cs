@@ -1,5 +1,5 @@
 ﻿using System.Security.Claims;
-using Common.Web;
+using BuildingBlocks.Web;
 using Identity.Api.DTOs;
 using Identity.Api.Filters;
 using Identity.Api.Services;

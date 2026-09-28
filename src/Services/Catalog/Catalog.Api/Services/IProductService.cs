@@ -1,5 +1,5 @@
 ﻿using Catalog.Api.DTOs;
-using Common.Core;
+using BuildingBlocks.Core;
 
 namespace Catalog.Api.Services
 {

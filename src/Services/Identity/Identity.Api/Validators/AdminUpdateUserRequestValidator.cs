@@ -1,4 +1,4 @@
-﻿using Common.Core;
+﻿using BuildingBlocks.Core;
 using FluentValidation;
 using Identity.Api.DTOs;
 
