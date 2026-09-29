@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using BuildingBlocks.Messaging;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Ordering.Api.Endpoints;
+using Ordering.Api.Messaging;
 using Ordering.Api.Options;
 using Ordering.Api.Services;
 using Ordering.Infrastructure.Data;
@@ -97,6 +99,12 @@ try
         .AddHttpClient<ICatalogServiceClient, CatalogServiceClient>(client =>
             client.BaseAddress = catalogBaseUri)
         .AddStandardResilienceHandler();
+
+    // Messaging: order events are written to the outbox and published to RabbitMQ in the background
+    builder.Services.AddRabbitMq(builder.Configuration);
+    builder.Services.Configure<OutboxOptions>(
+        builder.Configuration.GetSection(OutboxOptions.SectionName));
+    builder.Services.AddHostedService<OutboxPublisher>();
 
     // Serialize enums (e.g. OrderStatus) as strings
     builder.Services.ConfigureHttpJsonOptions(options =>

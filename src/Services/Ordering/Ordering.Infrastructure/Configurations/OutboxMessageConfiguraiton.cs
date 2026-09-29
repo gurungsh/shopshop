@@ -26,7 +26,7 @@ namespace Ordering.Infrastructure.Configurations
             builder.Property(m => m.LastError)
                 .HasMaxLength(2000);
 
-            builder.HasIndex(m => m.ProcessedAtutc);
+            builder.HasIndex(m => m.ProcessedAtUtc);
         }
     }
 }

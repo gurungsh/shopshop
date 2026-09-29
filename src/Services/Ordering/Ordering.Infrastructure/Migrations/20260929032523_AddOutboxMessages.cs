@@ -19,7 +19,7 @@ namespace Ordering.Infrastructure.Migrations
                     Type = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Payload = table.Column<string>(type: "jsonb", nullable: false),
                     OccurredAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ProcessedAtutc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ProcessedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     Attempts = table.Column<int>(type: "integer", nullable: false),
                     LastError = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true)
                 },
@@ -29,9 +29,9 @@ namespace Ordering.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_OutboxMessages_ProcessedAtutc",
+                name: "IX_OutboxMessages_ProcessedAtUtc",
                 table: "OutboxMessages",
-                column: "ProcessedAtutc");
+                column: "ProcessedAtUtc");
         }
 
         /// <inheritdoc />

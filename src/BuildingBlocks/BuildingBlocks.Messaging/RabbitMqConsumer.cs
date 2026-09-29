@@ -28,23 +28,23 @@ namespace BuildingBlocks.Messaging
             ReadOnlyMemory<byte> body,
             CancellationToken cancellationToken);
 
-        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await StartConsumingAsync(cancellationToken);
+                    await StartConsumingAsync(stoppingToken);
                     break;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogWarning(ex, "Could not start consuming. Queue:{Queue}. Retrying in {Delay}.", QueueName, ReconnectDelay);
-                    await Task.Delay(ReconnectDelay, cancellationToken);
+                    await Task.Delay(ReconnectDelay, stoppingToken);
                 }
             }
 
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            await Task.Delay(Timeout.Infinite, stoppingToken);
         }
 
         private async Task StartConsumingAsync(CancellationToken cancellationToken)

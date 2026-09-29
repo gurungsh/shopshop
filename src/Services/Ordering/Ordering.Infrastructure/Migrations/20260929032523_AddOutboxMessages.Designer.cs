@@ -12,7 +12,7 @@ using Ordering.Infrastructure.Data;
 namespace Ordering.Infrastructure.Migrations
 {
     [DbContext(typeof(OrderingDbContext))]
-    [Migration("20260929023418_AddOutboxMessages")]
+    [Migration("20260929032523_AddOutboxMessages")]
     partial class AddOutboxMessages
     {
         /// <inheritdoc />
@@ -110,7 +110,7 @@ namespace Ordering.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<DateTime?>("ProcessedAtutc")
+                    b.Property<DateTime?>("ProcessedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Type")
@@ -120,7 +120,7 @@ namespace Ordering.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProcessedAtutc");
+                    b.HasIndex("ProcessedAtUtc");
 
                     b.ToTable("OutboxMessages", (string)null);
                 });

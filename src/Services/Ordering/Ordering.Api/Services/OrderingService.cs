@@ -1,4 +1,6 @@
+using BuildingBlocks.Contracts.Orders;
 using BuildingBlocks.Core;
+using BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Ordering.Api.DTOs;
 using Ordering.Infrastructure.Constants;
@@ -152,6 +154,19 @@ namespace Ordering.Api.Services
             order.TotalAmount = order.Items.Sum(i => i.TotalPrice);
 
             _dbContext.Orders.Add(order);
+            AddOutboxMessage(RoutingKeys.OrderPlaced, new OrderPlacedEvent(
+                order.Id,
+                order.UserId,
+                order.TotalAmount,
+                order.Items
+                .Select(i => new OrderPlacedItem(
+                    i.ProductId,
+                    i.ProductName,
+                    i.Quantity,
+                    i.UnitPrice))
+                .ToList(),
+                order.CreatedAtUtc));
+
             await _dbContext.SaveChangesAsync();
 
             if (skippedProductIds.Length > 0)
@@ -178,7 +193,14 @@ namespace Ordering.Api.Services
 
             if (request.Status.HasValue)
             {
+                var previousStatus = order.Status;
+
                 order.Status = request.Status.Value;
+
+                if (order.Status == OrderStatus.Cancelled && previousStatus != OrderStatus.Cancelled)
+                {
+                    AddOrderCancelledOutboxMessage(order, Roles.Admin);
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(request.ShippingAddress))
@@ -219,7 +241,11 @@ namespace Ordering.Api.Services
                 return Result<OrderDetailResponse>.Failure("Order can no longer be cancelled.", ResultErrorType.Conflict);
             }
 
-            order.Status = OrderStatus.Cancelled;
+            if (order.Status != OrderStatus.Cancelled)
+            {
+                order.Status = OrderStatus.Cancelled;
+                AddOrderCancelledOutboxMessage(order, Roles.Customer);
+            }
             order.UpdatedAtUtc = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync();
@@ -241,7 +267,11 @@ namespace Ordering.Api.Services
                 return Result<OrderDetailResponse>.Failure("Order not found.", ResultErrorType.NotFound);
             }
 
-            order.Status = OrderStatus.Cancelled;
+            if (order.Status != OrderStatus.Cancelled)
+            {
+                order.Status = OrderStatus.Cancelled;
+                AddOrderCancelledOutboxMessage(order, Roles.Admin);
+            }
             order.UpdatedAtUtc = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync();
@@ -249,6 +279,24 @@ namespace Ordering.Api.Services
             _logger.LogInformation("Order cancelled by admin. Order Id:{OrderId}", order.Id);
 
             return Result<OrderDetailResponse>.Success(ToDetailResponse(order));
+        }
+
+        private void AddOutboxMessage<TEvent>(string routingKey, TEvent @event)
+        {
+            _dbContext.OutboxMessages.Add(new OutboxMessage
+            {
+                Type = routingKey,
+                Payload = MessageSerializer.Serialize(@event)
+            });
+        }
+
+        private void AddOrderCancelledOutboxMessage(Order order, string cancelledBy)
+        {
+            AddOutboxMessage(RoutingKeys.OrderCancelled, new OrderCancelledEvent(
+                order.Id,
+                order.UserId,
+                cancelledBy,
+                order.UpdatedAtUtc));
         }
 
         private static OrderDetailResponse ToDetailResponse(Order order)
