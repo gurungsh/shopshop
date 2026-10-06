@@ -1,4 +1,7 @@
-using Common.Core;
+using System.Text;
+using BuildingBlocks.Contracts.Orders;
+using BuildingBlocks.Core;
+using BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -80,6 +83,10 @@ namespace Ordering.Api.UnitTests
                     }
                 ]
             };
+        }
+        private static TEvent ReadOutboxEvent<TEvent>(OutboxMessage message)
+        {
+            return MessageSerializer.Deserialize<TEvent>(Encoding.UTF8.GetBytes(message.Payload));
         }
 
         #region CreateOrderAsync Tests
@@ -215,6 +222,54 @@ namespace Ordering.Api.UnitTests
             Assert.Equal(75m, result.Value.Order.TotalAmount);
         }
 
+        [Fact]
+        public async Task CreateOrderAsync_WithValidItems_ShouldAddOrderPlacedOutboxMessage()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var shoe = CreateTestProduct(name: "Running Shoe", price: 50m);
+            SetupCatalogProducts(shoe);
+
+            var request = new CreateOrderRequest("1 Test Street", [new CreateOrderItemRequest(shoe.Id, 2)]);
+
+            // Act
+            var result = await _orderingService.CreateOrderAsync(customerId, request);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.Value);
+
+            var message = await _dbContext.OutboxMessages.SingleAsync();
+            Assert.Equal(RoutingKeys.OrderPlaced, message.Type);
+            Assert.Null(message.ProcessedAtUtc);
+
+            var orderPlaced = ReadOutboxEvent<OrderPlacedEvent>(message);
+            Assert.Equal(result.Value.Order.Id, orderPlaced.OrderId);
+            Assert.Equal(customerId, orderPlaced.CustomerId);
+            Assert.Equal(100m, orderPlaced.TotalAmount);
+            var item = Assert.Single(orderPlaced.Items);
+            Assert.Equal(shoe.Id, item.ProductId);
+            Assert.Equal("Running Shoe", item.ProductName);
+            Assert.Equal(2, item.Quantity);
+            Assert.Equal(50m, item.UnitPrice);
+        }
+
+        [Fact]
+        public async Task CreateOrderAsync_WithNoValidItems_ShouldNotAddOutboxMessage()
+        {
+            // Arrange
+            SetupCatalogProducts();
+
+            var request = new CreateOrderRequest("1 Test Street", [new CreateOrderItemRequest(Guid.NewGuid(), 1)]);
+
+            // Act
+            var result = await _orderingService.CreateOrderAsync(Guid.NewGuid(), request);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Empty(_dbContext.OutboxMessages);
+        }
+
         #endregion
 
         #region CancelOrderForCustomerAsync Tests
@@ -285,6 +340,47 @@ namespace Ordering.Api.UnitTests
             Assert.Equal(OrderStatus.Pending, savedOrder.Status);
         }
 
+        [Fact]
+        public async Task CancelOrderForCustomerAsync_WithCancellableStatus_ShouldAddOrderCancelledOutboxMessage()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var order = CreateTestOrder(customerId);
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.CancelOrderForCustomerAsync(customerId, order.Id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+
+            var message = await _dbContext.OutboxMessages.SingleAsync();
+            Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
+
+            var orderCancelled = ReadOutboxEvent<OrderCancelledEvent>(message);
+            Assert.Equal(order.Id, orderCancelled.OrderId);
+            Assert.Equal(customerId, orderCancelled.CustomerId);
+            Assert.Equal(Roles.Customer, orderCancelled.CancelledBy);
+        }
+
+        [Fact]
+        public async Task CancelOrderForCustomerAsync_WithNonCancellableStatus_ShouldNotAddOutboxMessage()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var order = CreateTestOrder(customerId, OrderStatus.Shipped);
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.CancelOrderForCustomerAsync(customerId, order.Id);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Empty(_dbContext.OutboxMessages);
+        }
+
         #endregion
 
         #region CancelOrderForAdminAsync Tests
@@ -317,6 +413,43 @@ namespace Ordering.Api.UnitTests
             // Assert
             Assert.False(result.IsSuccess);
             Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+        }
+
+        [Fact]
+        public async Task CancelOrderForAdminAsync_WithActiveOrder_ShouldAddOrderCancelledOutboxMessage()
+        {
+            // Arrange
+            var order = CreateTestOrder(status: OrderStatus.Shipped);
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.CancelOrderForAdminAsync(order.Id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+
+            var message = await _dbContext.OutboxMessages.SingleAsync();
+            Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
+            Assert.Equal(Roles.Admin, ReadOutboxEvent<OrderCancelledEvent>(message).CancelledBy);
+        }
+
+        [Fact]
+        public async Task CancelOrderForAdminAsync_WithAlreadyCancelledOrder_ShouldNotAddOutboxMessage()
+        {
+            // Arrange
+            var order = CreateTestOrder(status: OrderStatus.Cancelled);
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.CancelOrderForAdminAsync(order.Id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.Value);
+            Assert.Equal(OrderStatus.Cancelled, result.Value.Status);
+            Assert.Empty(_dbContext.OutboxMessages);
         }
 
         #endregion
@@ -375,6 +508,45 @@ namespace Ordering.Api.UnitTests
             // Assert
             Assert.False(result.IsSuccess);
             Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+        }
+
+        [Fact]
+        public async Task UpdateOrderAsync_WithCancelledStatus_ShouldAddOrderCancelledOutboxMessage()
+        {
+            // Arrange
+            var order = CreateTestOrder(status: OrderStatus.Confirmed);
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync();
+
+            var request = new AdminUpdateOrderRequest(Status: OrderStatus.Cancelled);
+
+            // Act
+            var result = await _orderingService.UpdateOrderAsync(order.Id, request);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+
+            var message = await _dbContext.OutboxMessages.SingleAsync();
+            Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
+            Assert.Equal(Roles.Admin, ReadOutboxEvent<OrderCancelledEvent>(message).CancelledBy);
+        }
+
+        [Fact]
+        public async Task UpdateOrderAsync_WithNonCancelledStatus_ShouldNotAddOutboxMessage()
+        {
+            // Arrange
+            var order = CreateTestOrder(status: OrderStatus.Pending);
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync();
+
+            var request = new AdminUpdateOrderRequest(Status: OrderStatus.Shipped);
+
+            // Act
+            var result = await _orderingService.UpdateOrderAsync(order.Id, request);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Empty(_dbContext.OutboxMessages);
         }
 
         #endregion

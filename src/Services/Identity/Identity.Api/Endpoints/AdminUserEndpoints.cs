@@ -1,5 +1,5 @@
-﻿using Common.Core;
-using Common.Web;
+﻿using BuildingBlocks.Core;
+using BuildingBlocks.Web;
 using Identity.Api.DTOs;
 using Identity.Api.Filters;
 using Identity.Api.Services;

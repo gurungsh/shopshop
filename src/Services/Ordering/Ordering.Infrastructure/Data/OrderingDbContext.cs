@@ -7,7 +7,8 @@ namespace Ordering.Infrastructure.Data
     {
         public OrderingDbContext(DbContextOptions<OrderingDbContext> options) : base(options) { }
         public DbSet<Order> Orders => Set<Order>();
-        public DbSet<OrderItem> OrderItems=> Set<OrderItem>();
+        public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+        public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

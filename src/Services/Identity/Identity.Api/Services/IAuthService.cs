@@ -1,5 +1,5 @@
 ﻿using System.Security.Claims;
-using Common.Core;
+using BuildingBlocks.Core;
 using Identity.Api.DTOs;
 
 namespace Identity.Api.Services

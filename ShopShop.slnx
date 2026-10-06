@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />
+    <File Path="docker-compose.yml" />
     <File Path="readme.md" />
   </Folder>
   <Folder Name="/src/" />
@@ -9,9 +10,11 @@
     <Project Path="src/Services/Catalog/Catalog.Api/Catalog.Api.csproj" Id="d7599715-e4b0-4ea6-b31b-be7e5db01457" />
     <Project Path="src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj" Id="0e97ad64-63f9-4f5b-b8a8-fd3c16d59baf" />
   </Folder>
-  <Folder Name="/src/Services/Common/">
-    <Project Path="src/Services/Common/Common.Core/Common.Core.csproj" Id="3e98096a-d86b-40bb-a7de-e8c24f382f57" />
-    <Project Path="src/Services/Common/Common.Web/Common.Web/Common.Web.csproj" Id="e58150e1-88fe-479c-b1b0-266f5dadb341" />
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/BuildingBlocks.Contracts/BuildingBlocks.Contracts.csproj" Id="dcc495fc-f254-47c2-8836-36ad26139bf4" />
+    <Project Path="src/BuildingBlocks/BuildingBlocks.Core/BuildingBlocks.Core.csproj" Id="3e98096a-d86b-40bb-a7de-e8c24f382f57" />
+    <Project Path="src/BuildingBlocks/BuildingBlocks.Messaging/BuildingBlocks.Messaging.csproj" Id="d865fc5d-244c-43a9-bc83-16a870069f5c" />
+    <Project Path="src/BuildingBlocks/BuildingBlocks.Web/BuildingBlocks.Web.csproj" Id="e58150e1-88fe-479c-b1b0-266f5dadb341" />
   </Folder>
   <Folder Name="/src/Services/Identity/">
     <Project Path="src/Services/Identity/Identity.Api/Identity.Api.csproj" />

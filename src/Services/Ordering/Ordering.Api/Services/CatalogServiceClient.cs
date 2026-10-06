@@ -1,4 +1,4 @@
-using Common.Core;
+using BuildingBlocks.Core;
 using Polly.CircuitBreaker;
 using Polly.Timeout;
 
