@@ -79,6 +79,23 @@ namespace Ordering.Api.Endpoints
             })
             .WithName("CancelOrder");
 
+            // POST /api/orders/{id}/retry-payment
+            group.MapPost("/{id:guid}/retry-payment", async (
+                Guid id,
+                RetryOrderPaymentRequest request,
+                ClaimsPrincipal principal,
+                IOrderingService orderingService) =>
+            {
+                var caller = principal.ToCallerContext();
+                var result = await orderingService.RetryOrderPaymentAsync(caller.UserId, id, request);
+
+                return result.IsSuccess
+                    ? Results.Ok(result.Value)
+                    : EndpointResults.ToHttpResult(result);
+            })
+            .WithName("RetryOrderPayment")
+            .AddEndpointFilter<ValidationFilter<RetryOrderPaymentRequest>>();
+
             return app;
         }
     }

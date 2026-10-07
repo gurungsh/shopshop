@@ -38,13 +38,18 @@ namespace Ordering.Api.DTOs
         string ShippingAddress,
         OrderItemResponse[] Items,
         DateTime CreatedAtUtc,
-        DateTime UpdatedAtUtc);
+        DateTime UpdatedAtUtc,
+        string? PaymentFailureReason = null,
+        int PaymentRetriesRemaining = 0);
     public sealed record CreateOrderResponse(
         OrderDetailResponse Order,
         Guid[] SkippedProductIds);
     public sealed record CreateOrderRequest(
         string ShippingAddress,
-        CreateOrderItemRequest[] Items);
+        CreateOrderItemRequest[] Items,
+        string? PaymentMethodId = null);
+    public sealed record RetryOrderPaymentRequest(
+        string PaymentMethodId);
     public sealed record AdminUpdateOrderRequest(
         OrderStatus? Status = null,
         string? ShippingAddress = null);

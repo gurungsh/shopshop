@@ -13,5 +13,8 @@ namespace Ordering.Api.Services
         Task<Result<OrderDetailResponse>> UpdateOrderAsync(Guid id, AdminUpdateOrderRequest request);
         Task<Result<OrderDetailResponse>> CancelOrderForCustomerAsync(Guid customerId, Guid id);
         Task<Result<OrderDetailResponse>> CancelOrderForAdminAsync(Guid id);
+        Task<Result<OrderDetailResponse>> RetryOrderPaymentAsync(Guid customerId, Guid id, RetryOrderPaymentRequest request);
+        Task<Result<bool>> ConfirmOrderPaymentAsync(Guid orderId, int attempt);
+        Task<Result<bool>> FailOrderPaymentAsync(Guid orderId, int attempt, string reason);
     }
 }

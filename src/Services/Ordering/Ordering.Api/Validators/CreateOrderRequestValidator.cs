@@ -11,6 +11,10 @@ namespace Ordering.Api.Validators
                 .NotEmpty().WithMessage("Shipping address is required.")
                 .MaximumLength(500).WithMessage("Shipping address must not exceed 500 characters.");
 
+            RuleFor(x => x.PaymentMethodId)
+                .NotEmpty().WithMessage("Payment method id is required.")
+                .Matches(PaymentMethodIdRules.Pattern).WithMessage(PaymentMethodIdRules.Message);
+
             RuleFor(x => x.Items)
                 .NotEmpty().WithMessage("At least one item is required.");
 

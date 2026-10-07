@@ -2,7 +2,9 @@ using BuildingBlocks.Contracts.Orders;
 using BuildingBlocks.Core;
 using BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Ordering.Api.DTOs;
+using Ordering.Api.Options;
 using Ordering.Infrastructure.Constants;
 using Ordering.Infrastructure.Data;
 using Ordering.Infrastructure.Models;
@@ -15,20 +17,24 @@ namespace Ordering.Api.Services
         [
             OrderStatus.Pending,
             OrderStatus.Confirmed,
-            OrderStatus.Processing
+            OrderStatus.Processing,
+            OrderStatus.PaymentFailed
         ];
 
         private readonly OrderingDbContext _dbContext;
         private readonly ICatalogServiceClient _catalogServiceClient;
+        private readonly PaymentOptions _paymentOptions;
         private readonly ILogger<OrderingService> _logger;
 
         public OrderingService(
             OrderingDbContext dbContext,
             ICatalogServiceClient catalogServiceClient,
+            IOptions<PaymentOptions> paymentOptions,
             ILogger<OrderingService> logger)
         {
             _dbContext = dbContext;
             _catalogServiceClient = catalogServiceClient;
+            _paymentOptions = paymentOptions.Value;
             _logger = logger;
         }
 
@@ -140,6 +146,7 @@ namespace Ordering.Api.Services
                 UserId = customerId,
                 Status = OrderStatus.Pending,
                 ShippingAddress = request.ShippingAddress,
+                PaymentAttempts = 1,
                 Items = validItems
                     .Select(i => new OrderItem
                     {
@@ -165,7 +172,8 @@ namespace Ordering.Api.Services
                     i.Quantity,
                     i.UnitPrice))
                 .ToList(),
-                order.CreatedAtUtc));
+                order.CreatedAtUtc,
+                request.PaymentMethodId));
 
             await _dbContext.SaveChangesAsync();
 
@@ -281,6 +289,133 @@ namespace Ordering.Api.Services
             return Result<OrderDetailResponse>.Success(ToDetailResponse(order));
         }
 
+        public async Task<Result<OrderDetailResponse>> RetryOrderPaymentAsync(Guid customerId, Guid id, RetryOrderPaymentRequest request)
+        {
+            var order = await _dbContext.Orders
+                .Include(o => o.Items)
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order is null)
+            {
+                _logger.LogWarning("Order not found. Order Id:{OrderId}", id);
+                return Result<OrderDetailResponse>.Failure("Order not found.", ResultErrorType.NotFound);
+            }
+
+            if (order.UserId != customerId)
+            {
+                _logger.LogWarning("Customer tried to retry payment for invalid order. Customer Id:{CustomerId}, Order Id:{OrderId}", customerId, id);
+                return Result<OrderDetailResponse>.Failure("Order not found.", ResultErrorType.NotFound);
+            }
+
+            if (order.Status != OrderStatus.PaymentFailed || GetPaymentRetriesRemaining(order) <= 0)
+            {
+                _logger.LogWarning("Order payment can't be retried. Order Id:{OrderId}, Status:{Status}, Payment Attempts:{PaymentAttempts}", id, order.Status, order.PaymentAttempts);
+                return Result<OrderDetailResponse>.Failure("Payment can only be retried after a failed payment, while retries remain.", ResultErrorType.Conflict);
+            }
+
+            order.PaymentAttempts++;
+            order.Status = OrderStatus.Pending;
+            order.PaymentFailureReason = null;
+            order.UpdatedAtUtc = DateTime.UtcNow;
+
+            AddOutboxMessage(RoutingKeys.OrderPaymentRetried, new OrderPaymentRetriedEvent(
+                order.Id,
+                order.UserId,
+                order.TotalAmount,
+                order.PaymentAttempts,
+                request.PaymentMethodId,
+                order.UpdatedAtUtc));
+
+            await _dbContext.SaveChangesAsync();
+
+            _logger.LogInformation("Order payment retried. Order Id:{OrderId}, Attempt:{Attempt}", order.Id, order.PaymentAttempts);
+
+            return Result<OrderDetailResponse>.Success(ToDetailResponse(order));
+        }
+
+        public async Task<Result<bool>> ConfirmOrderPaymentAsync(Guid orderId, int attempt)
+        {
+            var order = await _dbContext.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order is null)
+            {
+                _logger.LogWarning("Payment succeeded for an unknown order. Order Id:{OrderId}", orderId);
+                return Result<bool>.Failure("Order not found.", ResultErrorType.NotFound);
+            }
+
+            if (!IsCurrentPendingAttempt(order, attempt))
+            {
+                return Result<bool>.Success(false);
+            }
+
+            order.Status = OrderStatus.Confirmed;
+            order.PaymentFailureReason = null;
+            order.UpdatedAtUtc = DateTime.UtcNow;
+
+            AddOutboxMessage(RoutingKeys.OrderConfirmed, new OrderConfirmedEvent(
+                order.Id,
+                order.UserId,
+                order.TotalAmount,
+                order.UpdatedAtUtc));
+
+            await _dbContext.SaveChangesAsync();
+
+            _logger.LogInformation("Order confirmed after payment. Order Id:{OrderId}, Attempt:{Attempt}", order.Id, attempt);
+
+            return Result<bool>.Success(true);
+        }
+
+        public async Task<Result<bool>> FailOrderPaymentAsync(Guid orderId, int attempt, string reason)
+        {
+            var order = await _dbContext.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order is null)
+            {
+                _logger.LogWarning("Payment failed for an unknown order. Order Id:{OrderId}", orderId);
+                return Result<bool>.Failure("Order not found.", ResultErrorType.NotFound);
+            }
+
+            if (!IsCurrentPendingAttempt(order, attempt))
+            {
+                return Result<bool>.Success(false);
+            }
+
+            var retriesRemaining = GetPaymentRetriesRemaining(order);
+
+            order.Status = retriesRemaining > 0 ? OrderStatus.PaymentFailed : OrderStatus.Failed;
+            order.PaymentFailureReason = reason.Length > OrderFieldLengths.PaymentFailureReason
+                ? reason[..OrderFieldLengths.PaymentFailureReason]
+                : reason;
+            order.UpdatedAtUtc = DateTime.UtcNow;
+
+            AddOutboxMessage(RoutingKeys.OrderPaymentFailed, new OrderPaymentFailedEvent(
+                order.Id,
+                order.UserId,
+                order.PaymentFailureReason,
+                retriesRemaining,
+                order.UpdatedAtUtc));
+
+            await _dbContext.SaveChangesAsync();
+
+            _logger.LogInformation("Order payment failed. Order Id:{OrderId}, Attempt:{Attempt}, Status:{Status}, Retries Remaining:{RetriesRemaining}", order.Id, attempt, order.Status, retriesRemaining);
+
+            return Result<bool>.Success(true);
+        }
+                
+        private bool IsCurrentPendingAttempt(Order order, int attempt)
+        {
+            if (attempt != order.PaymentAttempts || order.Status != OrderStatus.Pending)
+            {
+                _logger.LogWarning("Ignoring payment result. Order Id:{OrderId}, Attempt:{Attempt}, Current Attempt:{CurrentAttempt}, Status:{Status}", order.Id, attempt, order.PaymentAttempts, order.Status);
+                return false;
+            }
+
+            return true;
+        }
+
+        private int GetPaymentRetriesRemaining(Order order)
+            => Math.Max(0, _paymentOptions.MaxRetries - (order.PaymentAttempts - 1));
+
         private void AddOutboxMessage<TEvent>(string routingKey, TEvent @event)
         {
             _dbContext.OutboxMessages.Add(new OutboxMessage
@@ -299,7 +434,7 @@ namespace Ordering.Api.Services
                 order.UpdatedAtUtc));
         }
 
-        private static OrderDetailResponse ToDetailResponse(Order order)
+        private OrderDetailResponse ToDetailResponse(Order order)
         {
             return new OrderDetailResponse(
                 order.Id,
@@ -317,7 +452,9 @@ namespace Ordering.Api.Services
                         i.TotalPrice))
                     .ToArray(),
                 order.CreatedAtUtc,
-                order.UpdatedAtUtc);
+                order.UpdatedAtUtc,
+                order.PaymentFailureReason,
+                order.Status == OrderStatus.PaymentFailed ? GetPaymentRetriesRemaining(order) : 0);
         }
 
         private static IQueryable<Order> ApplyGetOrdersFilters(IQueryable<Order> orders, OrderQuery query)
