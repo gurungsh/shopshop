@@ -25,6 +25,10 @@
     <Project Path="src/Services/Ordering/Ordering.Api/Ordering.Api.csproj" />
     <Project Path="src/Services/Ordering/Ordering.Infrastructure/Ordering.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Payment/">
+    <Project Path="src/Services/Payment/Payment.Api/Payment.Api.csproj" Id="06a3b537-c055-48d4-a190-2f3b2da5eaca" />
+    <Project Path="src/Services/Payment/Payment.Infrastructure/Payment.Infrastructure.csproj" Id="f257db17-25d5-4b4b-b3cf-138f5eb3f412" />
+  </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Services/" />
   <Folder Name="/tests/Services/Catalog/">
