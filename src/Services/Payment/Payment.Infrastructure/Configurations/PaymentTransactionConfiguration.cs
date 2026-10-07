@@ -15,12 +15,11 @@ namespace Payment.Infrastructure.Configurations
             builder.Property(p => p.OrderId)
                 .IsRequired();
 
-            builder.Property(p => p.Amount)
-                .HasPrecision(18, 2)
+            builder.Property(p => p.Attempt)
                 .IsRequired();
 
-            builder.Property(p => p.Currency)
-                .HasMaxLength(3)
+            builder.Property(p => p.Amount)
+                .HasPrecision(18, 2)
                 .IsRequired();
 
             builder.Property(p => p.Status)
@@ -40,7 +39,8 @@ namespace Payment.Infrastructure.Configurations
             builder.Property(p => p.UpdatedAtUtc)
                 .IsRequired();
 
-            builder.HasIndex(p => p.OrderId)
+            // One payment per order attempt: a redelivered payment request is never charged twice
+            builder.HasIndex(p => new { p.OrderId, p.Attempt })
                 .IsUnique();
         }
     }

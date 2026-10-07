@@ -9,6 +9,7 @@
         Delivered,
         Cancelled,
         Refunded,
-        Failed
+        Failed,
+        PaymentFailed
     }
 }

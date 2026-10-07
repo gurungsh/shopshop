@@ -54,6 +54,19 @@ try
         throw new InvalidOperationException("CatalogService BaseUrl is missing or invalid.");
     }
 
+    var paymentSettings = builder.Configuration
+        .GetSection(PaymentOptions.SectionName)
+        .Get<PaymentOptions>()
+        ?? throw new InvalidOperationException("Payment configuration is missing.");
+
+    if (paymentSettings.MaxRetries < 0)
+    {
+        throw new InvalidOperationException("Payment MaxRetries must be zero or greater.");
+    }
+
+    builder.Services.Configure<PaymentOptions>(
+        builder.Configuration.GetSection(PaymentOptions.SectionName));
+
     // Infrastructure and database services
     var connectionString = builder.Configuration.GetConnectionString("OrderDb")
         ?? throw new InvalidOperationException("Connection string 'OrderDb' is missing.");
@@ -105,6 +118,7 @@ try
     builder.Services.Configure<OutboxOptions>(
         builder.Configuration.GetSection(OutboxOptions.SectionName));
     builder.Services.AddHostedService<OutboxPublisher>();
+    builder.Services.AddHostedService<PaymentEventsConsumer>();
 
     // Serialize enums (e.g. OrderStatus) as strings
     builder.Services.ConfigureHttpJsonOptions(options =>

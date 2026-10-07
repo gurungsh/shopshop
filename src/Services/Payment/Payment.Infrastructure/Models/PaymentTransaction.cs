@@ -6,8 +6,8 @@ namespace Payment.Infrastructure.Models
     {
         public Guid Id { get; set; } = Guid.NewGuid();
         public Guid OrderId { get; set; }
+        public int Attempt { get; set; }
         public decimal Amount { get; set; }
-        public string Currency { get; set; } = string.Empty;
         public PaymentStatus Status { get; set; }
         public string? FailureReason { get; set; }
         public string? ProviderReference { get; set; }

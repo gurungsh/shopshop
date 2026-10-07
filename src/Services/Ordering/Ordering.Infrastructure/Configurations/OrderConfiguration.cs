@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Ordering.Infrastructure.Constants;
 using Ordering.Infrastructure.Models;
 
 namespace Ordering.Infrastructure.Configurations
@@ -27,6 +28,12 @@ namespace Ordering.Infrastructure.Configurations
             builder.Property(o => o.ShippingAddress)
                 .HasMaxLength(500)
                 .IsRequired();
+
+            builder.Property(o => o.PaymentAttempts)
+                .IsRequired();
+
+            builder.Property(o => o.PaymentFailureReason)
+                .HasMaxLength(OrderFieldLengths.PaymentFailureReason);
 
             builder.Property(o => o.CreatedAtUtc)
                 .IsRequired();
