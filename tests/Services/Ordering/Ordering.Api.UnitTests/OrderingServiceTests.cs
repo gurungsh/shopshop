@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Ordering.Api.DTOs;
+using Ordering.Api.Options;
 using Ordering.Api.Services;
 using Ordering.Infrastructure.Constants;
 using Ordering.Infrastructure.Data;
@@ -15,6 +16,8 @@ namespace Ordering.Api.UnitTests
 {
     public class OrderingServiceTests
     {
+        private const int MaxRetries = 3;
+
         private readonly OrderingService _orderingService;
         private readonly OrderingDbContext _dbContext;
         private readonly Mock<ICatalogServiceClient> _mockCatalogClient;
@@ -30,7 +33,16 @@ namespace Ordering.Api.UnitTests
             _mockCatalogClient = new Mock<ICatalogServiceClient>();
             _mockLogger = new Mock<ILogger<OrderingService>>();
 
-            _orderingService = new OrderingService(_dbContext, _mockCatalogClient.Object, _mockLogger.Object);
+            _orderingService = CreateService(MaxRetries);
+        }
+
+        private OrderingService CreateService(int maxRetries)
+        {
+            return new OrderingService(
+                _dbContext,
+                _mockCatalogClient.Object,
+                Microsoft.Extensions.Options.Options.Create(new PaymentOptions { MaxRetries = maxRetries }),
+                _mockLogger.Object);
         }
 
         private static ProductDetails CreateTestProduct(
@@ -255,6 +267,28 @@ namespace Ordering.Api.UnitTests
         }
 
         [Fact]
+        public async Task CreateOrderAsync_WithPaymentMethodId_ShouldStartFirstAttemptAndIncludeItInEvent()
+        {
+            // Arrange
+            var shoe = CreateTestProduct(price: 50m);
+            SetupCatalogProducts(shoe);
+
+            var request = new CreateOrderRequest("1 Test Street", [new CreateOrderItemRequest(shoe.Id, 1)], "pm_card_chargeDeclined");
+
+            // Act
+            var result = await _orderingService.CreateOrderAsync(Guid.NewGuid(), request);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+
+            var order = await _dbContext.Orders.AsNoTracking().SingleAsync();
+            Assert.Equal(1, order.PaymentAttempts);
+
+            var orderPlaced = ReadOutboxEvent<OrderPlacedEvent>(await _dbContext.OutboxMessages.SingleAsync());
+            Assert.Equal("pm_card_chargeDeclined", orderPlaced.PaymentMethodId);
+        }
+
+        [Fact]
         public async Task CreateOrderAsync_WithNoValidItems_ShouldNotAddOutboxMessage()
         {
             // Arrange
@@ -278,6 +312,7 @@ namespace Ordering.Api.UnitTests
         [InlineData(OrderStatus.Pending)]
         [InlineData(OrderStatus.Confirmed)]
         [InlineData(OrderStatus.Processing)]
+        [InlineData(OrderStatus.PaymentFailed)]
         public async Task CancelOrderForCustomerAsync_WithCancellableStatus_ShouldCancelOrder(OrderStatus status)
         {
             // Arrange
@@ -302,6 +337,7 @@ namespace Ordering.Api.UnitTests
         [InlineData(OrderStatus.Shipped)]
         [InlineData(OrderStatus.Delivered)]
         [InlineData(OrderStatus.Cancelled)]
+        [InlineData(OrderStatus.Failed)]
         public async Task CancelOrderForCustomerAsync_WithNonCancellableStatus_ShouldReturnConflict(OrderStatus status)
         {
             // Arrange
@@ -638,6 +674,297 @@ namespace Ordering.Api.UnitTests
             Assert.NotNull(result.Value);
             Assert.Equal(2, result.Value.Count);
             Assert.All(result.Value, o => Assert.True(o.TotalAmount <= 100m));
+        }
+
+        #endregion
+
+        private async Task<Order> SeedPaymentOrderAsync(OrderStatus status = OrderStatus.Pending, int paymentAttempts = 1, Guid? customerId = null)
+        {
+            var order = CreateTestOrder(customerId, status);
+            order.PaymentAttempts = paymentAttempts;
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync();
+            _dbContext.ChangeTracker.Clear();
+            return order;
+        }
+
+        #region ConfirmOrderPaymentAsync Tests
+
+        [Fact]
+        public async Task ConfirmOrderPaymentAsync_CurrentPendingAttempt_ShouldConfirmAndQueueOrderConfirmed()
+        {
+            // Arrange
+            var order = await SeedPaymentOrderAsync(paymentAttempts: 2);
+
+            // Act
+            var result = await _orderingService.ConfirmOrderPaymentAsync(order.Id, 2);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.True(result.Value);
+
+            var saved = await _dbContext.Orders.AsNoTracking().SingleAsync();
+            Assert.Equal(OrderStatus.Confirmed, saved.Status);
+            Assert.Null(saved.PaymentFailureReason);
+
+            var message = await _dbContext.OutboxMessages.SingleAsync();
+            Assert.Equal(RoutingKeys.OrderConfirmed, message.Type);
+            var confirmed = ReadOutboxEvent<OrderConfirmedEvent>(message);
+            Assert.Equal(order.Id, confirmed.OrderId);
+            Assert.Equal(order.UserId, confirmed.CustomerId);
+            Assert.Equal(order.TotalAmount, confirmed.TotalAmount);
+        }
+
+        [Fact]
+        public async Task ConfirmOrderPaymentAsync_StaleAttempt_ShouldIgnoreResult()
+        {
+            // Arrange
+            var order = await SeedPaymentOrderAsync(paymentAttempts: 2);
+
+            // Act
+            var result = await _orderingService.ConfirmOrderPaymentAsync(order.Id, 1);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.False(result.Value);
+            Assert.Equal(OrderStatus.Pending, (await _dbContext.Orders.AsNoTracking().SingleAsync()).Status);
+            Assert.Empty(_dbContext.OutboxMessages);
+        }
+
+        [Theory]
+        [InlineData(OrderStatus.Confirmed)]
+        [InlineData(OrderStatus.Cancelled)]
+        public async Task ConfirmOrderPaymentAsync_OrderNotPending_ShouldIgnoreResult(OrderStatus status)
+        {
+            // Arrange
+            var order = await SeedPaymentOrderAsync(status);
+
+            // Act
+            var result = await _orderingService.ConfirmOrderPaymentAsync(order.Id, 1);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.False(result.Value);
+            Assert.Equal(status, (await _dbContext.Orders.AsNoTracking().SingleAsync()).Status);
+            Assert.Empty(_dbContext.OutboxMessages);
+        }
+
+        [Fact]
+        public async Task ConfirmOrderPaymentAsync_UnknownOrder_ShouldReturnNotFound()
+        {
+            // Act
+            var result = await _orderingService.ConfirmOrderPaymentAsync(Guid.NewGuid(), 1);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+        }
+
+        #endregion
+
+        #region FailOrderPaymentAsync Tests
+
+        [Fact]
+        public async Task FailOrderPaymentAsync_RetriesRemaining_ShouldSetPaymentFailedAndQueueEvent()
+        {
+            // Arrange
+            var order = await SeedPaymentOrderAsync(paymentAttempts: 1);
+
+            // Act
+            var result = await _orderingService.FailOrderPaymentAsync(order.Id, 1, "Your card was declined.");
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.True(result.Value);
+
+            var saved = await _dbContext.Orders.AsNoTracking().SingleAsync();
+            Assert.Equal(OrderStatus.PaymentFailed, saved.Status);
+            Assert.Equal("Your card was declined.", saved.PaymentFailureReason);
+
+            var message = await _dbContext.OutboxMessages.SingleAsync();
+            Assert.Equal(RoutingKeys.OrderPaymentFailed, message.Type);
+            var failed = ReadOutboxEvent<OrderPaymentFailedEvent>(message);
+            Assert.Equal(order.Id, failed.OrderId);
+            Assert.Equal("Your card was declined.", failed.Reason);
+            Assert.Equal(MaxRetries, failed.RetriesRemaining);
+        }
+
+        [Fact]
+        public async Task FailOrderPaymentAsync_LastRetryFails_ShouldSetFailed()
+        {
+            // Arrange
+            var lastAttempt = MaxRetries + 1;
+            var order = await SeedPaymentOrderAsync(paymentAttempts: lastAttempt);
+
+            // Act
+            var result = await _orderingService.FailOrderPaymentAsync(order.Id, lastAttempt, "Your card has insufficient funds.");
+
+            // Assert
+            Assert.True(result.IsSuccess);
+
+            var saved = await _dbContext.Orders.AsNoTracking().SingleAsync();
+            Assert.Equal(OrderStatus.Failed, saved.Status);
+            Assert.Equal("Your card has insufficient funds.", saved.PaymentFailureReason);
+
+            var failed = ReadOutboxEvent<OrderPaymentFailedEvent>(await _dbContext.OutboxMessages.SingleAsync());
+            Assert.Equal(0, failed.RetriesRemaining);
+        }
+
+        [Fact]
+        public async Task FailOrderPaymentAsync_RetriesDisabledInConfig_ShouldSetFailedOnFirstFailure()
+        {
+            // Arrange
+            var orderingService = CreateService(maxRetries: 0);
+            var order = await SeedPaymentOrderAsync(paymentAttempts: 1);
+
+            // Act
+            var result = await orderingService.FailOrderPaymentAsync(order.Id, 1, "Your card was declined.");
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal(OrderStatus.Failed, (await _dbContext.Orders.AsNoTracking().SingleAsync()).Status);
+        }
+
+        [Fact]
+        public async Task FailOrderPaymentAsync_ReasonTooLong_ShouldTruncateToColumnLength()
+        {
+            // Arrange
+            var order = await SeedPaymentOrderAsync(paymentAttempts: 1);
+
+            // Act
+            var result = await _orderingService.FailOrderPaymentAsync(order.Id, 1, new string('x', OrderFieldLengths.PaymentFailureReason + 50));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            var saved = await _dbContext.Orders.AsNoTracking().SingleAsync();
+            Assert.Equal(OrderFieldLengths.PaymentFailureReason, saved.PaymentFailureReason!.Length);
+        }
+
+        [Fact]
+        public async Task FailOrderPaymentAsync_StaleAttempt_ShouldIgnoreResult()
+        {
+            // Arrange
+            var order = await SeedPaymentOrderAsync(paymentAttempts: 3);
+
+            // Act
+            var result = await _orderingService.FailOrderPaymentAsync(order.Id, 2, "Declined");
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.False(result.Value);
+            Assert.Equal(OrderStatus.Pending, (await _dbContext.Orders.AsNoTracking().SingleAsync()).Status);
+            Assert.Empty(_dbContext.OutboxMessages);
+        }
+
+        [Fact]
+        public async Task FailOrderPaymentAsync_UnknownOrder_ShouldReturnNotFound()
+        {
+            // Act
+            var result = await _orderingService.FailOrderPaymentAsync(Guid.NewGuid(), 1, "Declined");
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+        }
+
+        #endregion
+
+        #region RetryOrderPaymentAsync Tests
+
+        [Fact]
+        public async Task RetryOrderPaymentAsync_PaymentFailedOrder_ShouldStartNextAttemptAndQueueEvent()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var order = await SeedPaymentOrderAsync(OrderStatus.PaymentFailed, paymentAttempts: 1, customerId: customerId);
+
+            // Act
+            var result = await _orderingService.RetryOrderPaymentAsync(customerId, order.Id, new RetryOrderPaymentRequest("pm_card_visa"));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal(OrderStatus.Pending, result.Value!.Status);
+            Assert.Null(result.Value.PaymentFailureReason);
+
+            var saved = await _dbContext.Orders.AsNoTracking().SingleAsync();
+            Assert.Equal(OrderStatus.Pending, saved.Status);
+            Assert.Equal(2, saved.PaymentAttempts);
+
+            var message = await _dbContext.OutboxMessages.SingleAsync();
+            Assert.Equal(RoutingKeys.OrderPaymentRetried, message.Type);
+            var retried = ReadOutboxEvent<OrderPaymentRetriedEvent>(message);
+            Assert.Equal(order.Id, retried.OrderId);
+            Assert.Equal(2, retried.Attempt);
+            Assert.Equal(order.TotalAmount, retried.TotalAmount);
+            Assert.Equal("pm_card_visa", retried.PaymentMethodId);
+        }
+
+        [Theory]
+        [InlineData(OrderStatus.Pending)]
+        [InlineData(OrderStatus.Confirmed)]
+        [InlineData(OrderStatus.Failed)]
+        public async Task RetryOrderPaymentAsync_OrderNotPaymentFailed_ShouldReturnConflict(OrderStatus status)
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var order = await SeedPaymentOrderAsync(status, customerId: customerId);
+
+            // Act
+            var result = await _orderingService.RetryOrderPaymentAsync(customerId, order.Id, new RetryOrderPaymentRequest("pm_card_visa"));
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
+            Assert.Empty(_dbContext.OutboxMessages);
+        }
+
+        [Fact]
+        public async Task RetryOrderPaymentAsync_NoRetriesRemaining_ShouldReturnConflict()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var order = await SeedPaymentOrderAsync(OrderStatus.PaymentFailed, paymentAttempts: MaxRetries + 1, customerId: customerId);
+
+            // Act
+            var result = await _orderingService.RetryOrderPaymentAsync(customerId, order.Id, new RetryOrderPaymentRequest("pm_card_visa"));
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
+        }
+
+        [Fact]
+        public async Task RetryOrderPaymentAsync_OtherCustomersOrder_ShouldReturnNotFound()
+        {
+            // Arrange
+            var order = await SeedPaymentOrderAsync(OrderStatus.PaymentFailed);
+
+            // Act
+            var result = await _orderingService.RetryOrderPaymentAsync(Guid.NewGuid(), order.Id, new RetryOrderPaymentRequest("pm_card_visa"));
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+        }
+
+        [Fact]
+        public async Task GetOrderForCustomerAsync_PaymentFailedOrder_ShouldReturnReasonAndRetriesRemaining()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var order = CreateTestOrder(customerId, OrderStatus.PaymentFailed);
+            order.PaymentAttempts = 2;
+            order.PaymentFailureReason = "Your card was declined.";
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.GetOrderForCustomerAsync(customerId, order.Id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal("Your card was declined.", result.Value!.PaymentFailureReason);
+            Assert.Equal(MaxRetries - 1, result.Value.PaymentRetriesRemaining);
         }
 
         #endregion

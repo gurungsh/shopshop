@@ -40,4 +40,7 @@
   <Folder Name="/tests/Services/Ordering/">
     <Project Path="tests/Services/Ordering/Ordering.Api.UnitTests/Ordering.Api.UnitTests.csproj" />
   </Folder>
+  <Folder Name="/tests/Services/Payment/">
+    <Project Path="tests/Services/Payment/Payment.Api.UnitTests/Payment.Api.UnitTests.csproj" />
+  </Folder>
 </Solution>
