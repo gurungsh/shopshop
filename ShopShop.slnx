@@ -21,6 +21,9 @@
     <Project Path="src/Services/Identity/Identity.Api/Identity.Api.csproj" />
     <Project Path="src/Services/Identity/Identity.Infrastructure/Identity.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Notification/">
+    <Project Path="src/Services/Notification/Notification.Api/Notification.Api.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Ordering/">
     <Project Path="src/Services/Ordering/Ordering.Api/Ordering.Api.csproj" />
     <Project Path="src/Services/Ordering/Ordering.Infrastructure/Ordering.Infrastructure.csproj" />
@@ -36,6 +39,9 @@
   </Folder>
   <Folder Name="/tests/Services/Identity/">
     <Project Path="tests/Services/Identity/Identity.Api.UnitTests/Identity.Api.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Notification/">
+    <Project Path="tests/Services/Notification/Notification.Api.UnitTests/Notification.Api.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tests/Services/Ordering/">
     <Project Path="tests/Services/Ordering/Ordering.Api.UnitTests/Ordering.Api.UnitTests.csproj" />

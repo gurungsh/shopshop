@@ -77,7 +77,7 @@ flowchart LR
     orders{{RabbitMQ<br/>shopshop.orders}}
     payments{{RabbitMQ<br/>shopshop.payments}}
     stripe([Stripe<br/>test mode])
-    notification[Notification.Api<br/>planned]
+    notification[Notification.Api<br/>logs events for now]
 
     client -- JWT login --> idApi
     client -- Bearer JWT --> catApi
@@ -89,9 +89,6 @@ flowchart LR
     payOutbox -- publish with confirms --> payments
     payments -.->|"payment.*"| ordConsumer
     orders -.->|"order.confirmed, order.payment-failed, order.cancelled"| notification
-
-    classDef planned stroke-dasharray: 5 5
-    class notification planned
 ```
 
 - **Synchronous (HTTP):** used when the caller needs an answer now. Ordering asks Catalog for product names, prices and active state before creating an order.
@@ -111,7 +108,7 @@ sequenceDiagram
     participant P as Payment
     participant S as Stripe
     participant PX as shopshop.payments
-    participant N as Notification (planned)
+    participant N as Notification
 
     C->>O: POST /api/orders with paymentMethodId
     O-->>C: 201 Created, status Pending
@@ -160,7 +157,7 @@ stateDiagram-v2
 - **Retries:** `Payment:MaxRetries` in Ordering's config (default 3) sets how many retries follow the first attempt. Each attempt has its own number, which travels on every event.
 - **Failure reasons:** Stripe's card decline messages are written for customers and are shown as they are. Provider errors get a generic message, and the details are only logged.
 - **Stale results:** a result for an older attempt, a redelivered result, or a result for an order cancelled while paying changes nothing. Refunds are not implemented.
-- **Notification:** consumes `order.confirmed`, `order.payment-failed` and `order.cancelled` from Ordering rather than Payment's events, so it only announces what Ordering actually did. Until it exists, a debug queue must be bound to these keys, or the unroutable events block Ordering's outbox (see the [readme](../readme.md#5-events-nobody-consumes-yet)).
+- **Notification:** consumes `order.confirmed`, `order.payment-failed` and `order.cancelled` from Ordering rather than Payment's events, so it only announces what Ordering actually did. For now it only logs them. It must have started at least once so its queue exists, or the unroutable events block Ordering's outbox (see the [readme](../readme.md#5-start-every-consumer-at-least-once)).
 
 ## Order event flow
 
@@ -311,15 +308,18 @@ ShopShop/
 │       ├── Ordering/
 │       │   ├── Ordering.Api
 │       │   └── Ordering.Infrastructure
-│       └── Payment/
-│           ├── Payment.Api
-│           └── Payment.Infrastructure
+│       ├── Payment/
+│       │   ├── Payment.Api
+│       │   └── Payment.Infrastructure
+│       └── Notification/
+│           └── Notification.Api
 ├── tests/
 │   └── Services/
 │       ├── Identity/Identity.Api.UnitTests
 │       ├── Catalog/Catalog.Api.UnitTests
 │       ├── Ordering/Ordering.Api.UnitTests
-│       └── Payment/Payment.Api.UnitTests
+│       ├── Payment/Payment.Api.UnitTests
+│       └── Notification/Notification.Api.UnitTests
 ├── docker-compose.yml
 ├── init-dbs.sql
 └── ShopShop.slnx
@@ -343,6 +343,8 @@ Ordering.Api/
 ```
 
 Payment.Api has no endpoints: just `DTOs/`, `Messaging/` (`OutboxPublisher`, `OrderEventsConsumer`), `Options/`, `Services/` and `Program.cs`.
+
+Notification has only an Api project, because it stores nothing yet: `Messaging/` (`OrderEventsConsumer`), `Services/` (`NotificationService`) and `Program.cs`.
 
 ### Infrastructure projects
 
