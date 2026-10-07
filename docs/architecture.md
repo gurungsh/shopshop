@@ -6,6 +6,7 @@ This page covers which concepts are used in ShopShop and where to find them in t
 
 - [Key concepts](#key-concepts)
 - [Architecture](#architecture)
+- [Payment flow](#payment-flow)
 - [Order event flow](#order-event-flow)
 - [Database diagram](#database-diagram)
 - [Project structure](#project-structure)
@@ -20,14 +21,17 @@ This page covers which concepts are used in ShopShop and where to find them in t
 | Search as `POST` | List endpoints are `POST …/search` with a `<Entity>Query` record body, and a bare `POST` is always a create. | `ProductEndpoints`, `OrderEndpoints` |
 | Result pattern | Business failures return `Result<T>` with a `ResultErrorType` instead of throwing, and `EndpointResults.ToHttpResult` maps them to HTTP status codes. | `src/BuildingBlocks/BuildingBlocks.Core`, `BuildingBlocks.Web` |
 | Validation | FluentValidation validators run through a generic `ValidationFilter<T>` endpoint filter. | `*.Api/Validators/`, `*.Api/Filters/` |
-| Authentication across services | Identity issues HS256 JWTs. Catalog and Ordering validate them locally with the shared `JwtSettings`, with no call back to Identity. | `Identity.Api/Services/AuthService.cs`, each `Program.cs` |
+| Authentication across services | Identity issues HS256 JWTs. Catalog and Ordering validate them locally with the shared `JwtSettings`, with no call back to Identity. Payment has no public API. | `Identity.Api/Services/AuthService.cs`, each `Program.cs` |
 | Role-based authorization | `Admin` and `Customer` roles come from one shared `Roles` class. Admin groups use `RequireRole(Roles.Admin)`. | `BuildingBlocks.Core/Roles.cs` |
 | Resilient service-to-service HTTP | Ordering calls Catalog through a typed `HttpClient` with `AddStandardResilienceHandler()`. Transport failures become `ServiceUnavailable`, which maps to 503. | `Ordering.Api/Services/CatalogServiceClient.cs` |
 | Data snapshots | Order items copy the product name and price at order time, so orders don't depend on the catalog later. Prices always come from Catalog, never from the client. | `OrderItem.ProductName` / `UnitPrice` |
-| Transactional outbox | Events are saved as `OutboxMessage` rows in the same `SaveChangesAsync` as the order. A background service publishes them afterwards. | `OrderingService.AddOutboxMessage`, `Ordering.Api/Messaging/OutboxPublisher.cs` |
+| Transactional outbox | Ordering and Payment save events as `OutboxMessage` rows in the same `SaveChangesAsync` as the change they describe. A background service in each publishes them afterwards. | `OrderingService.AddOutboxMessage`, `PaymentProcessingService`, `*.Api/Messaging/OutboxPublisher.cs` |
 | Reliable publishing | Publisher confirms and `mandatory: true` make unroutable or unconfirmed messages fail. Failed rows keep `Attempts` and `LastError` and are retried on the next poll. | `BuildingBlocks.Messaging/RabbitMqPublisher.cs` |
-| Messaging topology | Topic exchange `shopshop.orders` with routing keys `order.placed` and `order.cancelled`. Each consumer gets one durable queue, which dead-letters to `<queue>.dead` through `shopshop.dlx`. | `MessagingTopology.cs`, `RabbitMqConsumer.cs` |
-| Integration event contracts | Events are versionable `sealed record`s in a shared contracts library, serialised as camelCase JSON. | `BuildingBlocks.Contracts/Orders/` |
+| Messaging topology | Topic exchanges `shopshop.orders` (`order.placed`, `order.payment-retried`, `order.confirmed`, `order.payment-failed`, `order.cancelled`) and `shopshop.payments` (`payment.succeeded`, `payment.failed`). Each consumer gets one durable queue, which dead-letters to `<queue>.dead` through `shopshop.dlx`. | `MessagingTopology.cs`, `RoutingKeys.cs`, `PaymentRoutingKeys.cs`, `RabbitMqConsumer.cs` |
+| Choreography | No central coordinator: each service reacts to events and publishes its own. Payment never calls Ordering, and Ordering never calls Payment. | `*.Api/Messaging/*Consumer.cs` |
+| Idempotent consumers | Payment stores one `PaymentTransaction` per order and attempt (unique index) and sends Stripe an idempotency key per attempt, so a redelivered message never charges twice. Ordering ignores results for an older attempt or for an order that is no longer `Pending`. | `PaymentProcessingService`, `StripePaymentService`, `OrderingService.IsCurrentPendingAttempt` |
+| Card data stays with Stripe | Clients send only a Stripe payment method id (`pm_...`), validated in Ordering. Card numbers never reach our services. | `PaymentMethodIdRules`, `StripePaymentService` |
+| Integration event contracts | Events are versionable `sealed record`s in a shared contracts library, serialised as camelCase JSON. | `BuildingBlocks.Contracts/Orders/`, `BuildingBlocks.Contracts/Payments/` |
 | Structured logging | Serilog with message templates, writing to the console and to CLEF files in `logs/`, plus request logging. | each `Program.cs`, `appsettings.json` |
 | Centralised error handling | `UseExceptionHandler` logs unexpected exceptions and returns a generic 500 body. | each `Program.cs` |
 | Fail-fast configuration | Options and connection strings are checked at startup. Secrets live in user secrets, never in appsettings. | each `Program.cs`, `*.Api/Options/` |
@@ -55,45 +59,108 @@ flowchart LR
     subgraph ordering[Ordering]
         ordApi[Ordering.Api]
         ordDb[(OrderDb<br/>Orders + OutboxMessages)]
-        outbox[OutboxPublisher]
+        ordOutbox[OutboxPublisher]
+        ordConsumer[PaymentEventsConsumer]
         ordApi --> ordDb
-        outbox -- polls --> ordDb
+        ordOutbox -- polls --> ordDb
+        ordConsumer --> ordDb
     end
 
-    rabbit{{RabbitMQ<br/>shopshop.orders}}
-    payment[Payment.Worker<br/>planned]
+    subgraph payment[Payment]
+        payConsumer[OrderEventsConsumer]
+        payDb[(PaymentDb<br/>PaymentTransactions + OutboxMessages)]
+        payOutbox[OutboxPublisher]
+        payConsumer --> payDb
+        payOutbox -- polls --> payDb
+    end
+
+    orders{{RabbitMQ<br/>shopshop.orders}}
+    payments{{RabbitMQ<br/>shopshop.payments}}
+    stripe([Stripe<br/>test mode])
     notification[Notification.Api<br/>planned]
 
     client -- JWT login --> idApi
     client -- Bearer JWT --> catApi
     client -- Bearer JWT --> ordApi
     ordApi -- HTTP + resilience --> catApi
-    outbox -- publish with confirms --> rabbit
-    rabbit -.->|"order.placed"| payment
-    payment -.->|"payment result"| rabbit
-    rabbit -.->|"payment result"| outbox
-    rabbit -.->|"order status updates"| notification
+    ordOutbox -- publish with confirms --> orders
+    orders -.->|"order.placed, order.payment-retried"| payConsumer
+    payConsumer -- charge --> stripe
+    payOutbox -- publish with confirms --> payments
+    payments -.->|"payment.*"| ordConsumer
+    orders -.->|"order.confirmed, order.payment-failed, order.cancelled"| notification
 
     classDef planned stroke-dasharray: 5 5
-    class payment,notification planned
+    class notification planned
 ```
 
 - **Synchronous (HTTP):** used when the caller needs an answer now. Ordering asks Catalog for product names, prices and active state before creating an order.
-- **Asynchronous (events):** used when other services only need to react. Ordering publishes `order.placed` and `order.cancelled`.
+- **Asynchronous (events):** used when other services only need to react. Ordering and Payment talk to each other only through events.
 - Services never access another service's database.
 
-### Planned payment and notification flow
+## Payment flow
 
-Payment and Notification are not implemented yet. The intended flow is:
+What happens once an order is placed. Every arrow into or out of RabbitMQ goes through the sender's outbox, so an event is only sent if the change that caused it was saved.
 
-1. A customer places an order. Ordering saves it as `Pending` and publishes `order.placed`.
-2. Payment.Worker consumes `order.placed` and publishes a success or failure result.
-3. Ordering consumes the result and updates the order:
-   - **Success:** the order becomes `Confirmed`, and the status update goes to Notification.
-   - **Failure:** the order becomes `Failed` with a reason. The customer sees the error on the order itself (`GET /api/orders/{id}`). Nothing goes to Notification.
-4. Any other order status update (for example an admin moving an order to `Shipped`) also goes to Notification, which pushes it to the live SignalR page.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    participant O as Ordering
+    participant OX as shopshop.orders
+    participant P as Payment
+    participant S as Stripe
+    participant PX as shopshop.payments
+    participant N as Notification (planned)
 
-So Notification only hears about successful payments and status updates, never about payment failures.
+    C->>O: POST /api/orders with paymentMethodId
+    O-->>C: 201 Created, status Pending
+    O->>OX: order.placed (attempt 1)
+    OX->>P: via queue payment.order-events
+    Note over P: skip if this order and attempt was already charged
+    P->>S: create and confirm a PaymentIntent in USD
+    S-->>P: succeeded, or card declined
+    P->>PX: payment.succeeded or payment.failed
+    PX->>O: via queue ordering.payment-events
+    Note over O: ignore if the attempt is stale or the order is no longer Pending
+    alt payment succeeded
+        O->>O: Pending to Confirmed
+        O->>OX: order.confirmed
+        OX-->>N: order.confirmed
+    else failed, retries left
+        O->>O: Pending to PaymentFailed, store reason
+        O->>OX: order.payment-failed with retriesRemaining
+        OX-->>N: order.payment-failed
+        C->>O: POST /api/orders/{id}/retry-payment with a new paymentMethodId
+        O->>O: PaymentFailed to Pending, attempt + 1
+        O->>OX: order.payment-retried (next attempt)
+        Note over OX,P: Payment charges the new attempt the same way
+    else failed, no retries left
+        O->>O: Pending to Failed, store reason
+        O->>OX: order.payment-failed with retriesRemaining 0
+        OX-->>N: order.payment-failed
+    end
+```
+
+The order status while it waits for payment:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: order placed (attempt 1)
+    Pending --> Confirmed: payment.succeeded
+    Pending --> PaymentFailed: payment.failed, retries left
+    Pending --> Failed: payment.failed, no retries left
+    PaymentFailed --> Pending: customer retries with a new card
+    Pending --> Cancelled: cancelled
+    PaymentFailed --> Cancelled: cancelled
+    Confirmed --> Cancelled: cancelled
+    Failed --> [*]
+```
+
+- **Retries:** `Payment:MaxRetries` in Ordering's config (default 3) sets how many retries follow the first attempt. Each attempt has its own number, which travels on every event.
+- **Failure reasons:** Stripe's card decline messages are written for customers and are shown as they are. Provider errors get a generic message, and the details are only logged.
+- **Stale results:** a result for an older attempt, a redelivered result, or a result for an order cancelled while paying changes nothing. Refunds are not implemented.
+- **Notification:** consumes `order.confirmed`, `order.payment-failed` and `order.cancelled` from Ordering rather than Payment's events, so it only announces what Ordering actually did. Until it exists, a debug queue must be bound to these keys, or the unroutable events block Ordering's outbox (see the [readme](../readme.md#5-events-nobody-consumes-yet)).
 
 ## Order event flow
 
@@ -171,6 +238,8 @@ erDiagram
         numeric TotalAmount "18,2"
         varchar Status "enum stored as string"
         varchar ShippingAddress "max 500"
+        int PaymentAttempts "1 for the first attempt"
+        varchar PaymentFailureReason "nullable, max 500, shown to the customer"
         timestamptz CreatedAtUtc
         timestamptz UpdatedAtUtc
     }
@@ -192,6 +261,19 @@ erDiagram
         varchar LastError "nullable, max 2000"
     }
     Orders ||--|{ OrderItems : has
+
+    %% ---------- PaymentDb (Payment) ----------
+    PaymentTransactions {
+        uuid Id PK "sent as PaymentId on payment events"
+        uuid OrderId "logical ref to OrderDb.Orders, unique with Attempt"
+        int Attempt
+        numeric Amount "18,2, USD"
+        varchar Status "Succeeded | Failed"
+        varchar FailureReason "nullable, max 500, shown to the customer"
+        varchar ProviderReference "nullable, Stripe PaymentIntent id"
+        timestamptz CreatedAtUtc
+        timestamptz UpdatedAtUtc
+    }
 ```
 
 | Database | Tables | Owner |
@@ -199,13 +281,15 @@ erDiagram
 | `AuthDb` | `Users` | Identity |
 | `CatalogDb` | `Categories`, `Products` | Catalog |
 | `OrderDb` | `Orders`, `OrderItems`, `OutboxMessages` | Ordering |
+| `PaymentDb` | `PaymentTransactions`, `OutboxMessages` | Payment |
 
 Notes:
 
-- `Orders.UserId` and `OrderItems.ProductId` point to data in **other databases**, so they are plain ids with no foreign key. Consistency is handled by the owning service, not by the database.
+- `Orders.UserId`, `OrderItems.ProductId` and `PaymentTransactions.OrderId` point to data in **other databases**, so they are plain ids with no foreign key. Consistency is handled by the owning service, not by the database.
 - `OrderItems.ProductName` and `UnitPrice` are **snapshots**: later catalog changes don't rewrite past orders. `TotalPrice` is computed in code and not stored.
-- `Orders.Status` values: `Pending`, `Confirmed`, `Processing`, `Shipped`, `Delivered`, `Cancelled`, `Refunded`, `Failed`.
-- `OutboxMessages.ProcessedAtUtc` is indexed because the publisher reads pending rows (`ProcessedAtUtc IS NULL`).
+- `Orders.Status` values: `Pending`, `Confirmed`, `Processing`, `Shipped`, `Delivered`, `Cancelled`, `Refunded`, `Failed`, `PaymentFailed`.
+- `PaymentTransactions` has a unique index on (`OrderId`, `Attempt`), so each attempt is charged at most once.
+- `PaymentDb.OutboxMessages` has the same shape as Ordering's. `OutboxMessages.ProcessedAtUtc` is indexed in both because the publishers read pending rows (`ProcessedAtUtc IS NULL`).
 
 ## Project structure
 
@@ -215,7 +299,7 @@ ShopShop/
 │   ├── BuildingBlocks/
 │   │   ├── BuildingBlocks.Core         # Result<T>, ResultErrorType, Roles
 │   │   ├── BuildingBlocks.Web          # EndpointResults.ToHttpResult
-│   │   ├── BuildingBlocks.Contracts    # integration events + RoutingKeys
+│   │   ├── BuildingBlocks.Contracts    # integration events + routing keys (Orders/, Payments/)
 │   │   └── BuildingBlocks.Messaging    # RabbitMQ connection, publisher, consumer base, topology
 │   └── Services/
 │       ├── Identity/
@@ -224,14 +308,18 @@ ShopShop/
 │       ├── Catalog/
 │       │   ├── Catalog.Api
 │       │   └── Catalog.Infrastructure
-│       └── Ordering/
-│           ├── Ordering.Api
-│           └── Ordering.Infrastructure
+│       ├── Ordering/
+│       │   ├── Ordering.Api
+│       │   └── Ordering.Infrastructure
+│       └── Payment/
+│           ├── Payment.Api
+│           └── Payment.Infrastructure
 ├── tests/
 │   └── Services/
 │       ├── Identity/Identity.Api.UnitTests
 │       ├── Catalog/Catalog.Api.UnitTests
-│       └── Ordering/Ordering.Api.UnitTests
+│       ├── Ordering/Ordering.Api.UnitTests
+│       └── Payment/Payment.Api.UnitTests
 ├── docker-compose.yml
 ├── init-dbs.sql
 └── ShopShop.slnx
@@ -247,12 +335,14 @@ Ordering.Api/
 ├── Endpoints/
 ├── Extensions/
 ├── Filters/
-├── Messaging/        # OutboxPublisher
+├── Messaging/        # OutboxPublisher, PaymentEventsConsumer
 ├── Options/
 ├── Services/
 ├── Validators/
 └── Program.cs
 ```
+
+Payment.Api has no endpoints: just `DTOs/`, `Messaging/` (`OutboxPublisher`, `OrderEventsConsumer`), `Options/`, `Services/` and `Program.cs`.
 
 ### Infrastructure projects
 
