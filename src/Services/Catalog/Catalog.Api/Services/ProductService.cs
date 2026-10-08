@@ -1,26 +1,49 @@
 ﻿using BuildingBlocks.Core;
+using Catalog.Api.Cacheing;
+using Catalog.Api.Caching;
 using Catalog.Api.DTOs;
+using Catalog.Api.Options;
 using Catalog.Infrastructure.Data;
 using Catalog.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Catalog.Api.Services
 {
     public class ProductService : IProductService
     {
         private readonly CatalogDbContext _dbContext;
+        private readonly ICatalogCache _cache;
+        private readonly CacheOptions _cacheOptions;
         private readonly ILogger<ProductService> _logger;
 
         public ProductService(
             CatalogDbContext dbContext,
+            ICatalogCache cache,
+            IOptions<CacheOptions> cacheOptions,
             ILogger<ProductService> logger)
         {
             _dbContext = dbContext;
+            _cache = cache;
+            _cacheOptions = cacheOptions.Value;
             _logger = logger;
         }
 
         public async Task<Result<PagedResponse<ProductResponse>>> GetProductsAsync(ProductQuery query)
         {
+            var version = await _cache.GetVersionAsync();
+            string? cacheKey = null;
+
+            if (version is not null)
+            {
+                cacheKey = CatalogCacheKeys.ProductSearch(version, query);
+                var cached = await _cache.GetAsync<PagedResponse<ProductResponse>>(cacheKey);
+                if (cached is not null)
+                {
+                    return Result<PagedResponse<ProductResponse>>.Success(cached);
+                }
+            }
+
             var products = _dbContext.Products.AsNoTracking();
 
             if (query.Ids?.Length > 0)
@@ -77,12 +100,26 @@ namespace Catalog.Api.Services
                     p.UpdatedAtUtc))
                 .ToListAsync();
 
-            return Result<PagedResponse<ProductResponse>>.Success(
-                new PagedResponse<ProductResponse>(items, query.Page, query.PageSize, totalCount));
+            var response = new PagedResponse<ProductResponse>(items, query.Page, query.PageSize, totalCount);
+
+            if (cacheKey is not null)
+            {
+                await _cache.SetAsync(cacheKey, response, TimeSpan.FromMinutes(_cacheOptions.SearchTtlMinutes));
+            }
+
+            return Result<PagedResponse<ProductResponse>>.Success(response);
         }
 
         public async Task<Result<ProductResponse>> GetProductAsync(Guid id)
         {
+            var cacheKey = CatalogCacheKeys.Product(id);
+            var cached = await _cache.GetAsync<ProductResponse>(cacheKey);
+
+            if (cached is not null)
+            {
+                return Result<ProductResponse>.Success(cached);
+            }
+
             var product = await _dbContext.Products
                 .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == id);
@@ -93,7 +130,7 @@ namespace Catalog.Api.Services
                 return Result<ProductResponse>.Failure("Product not found.", ResultErrorType.NotFound);
             }
 
-            return Result<ProductResponse>.Success(new ProductResponse(
+            var response = new ProductResponse(
                     product.Id,
                     product.CategoryId,
                     product.Name,
@@ -102,7 +139,11 @@ namespace Catalog.Api.Services
                     product.Price,
                     product.IsActive,
                     product.CreatedAtUtc,
-                    product.UpdatedAtUtc));
+                    product.UpdatedAtUtc);
+
+            await _cache.SetAsync(cacheKey, response, TimeSpan.FromMinutes(_cacheOptions.EntityTtlMinutes));
+
+            return Result<ProductResponse>.Success(response);
         }
 
         public async Task<Result<ProductResponse>> CreateProductAsync(AdminCreateProductRequest request)
@@ -119,6 +160,7 @@ namespace Catalog.Api.Services
 
             _dbContext.Add(product);
             await _dbContext.SaveChangesAsync();
+            await _cache.BumpVersionAsync();
 
             _logger.LogInformation("Product created. Product Id:{ProductId}, Name:{Name}", product.Id, product.Name);
 
@@ -192,6 +234,8 @@ namespace Catalog.Api.Services
             product.UpdatedAtUtc = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync();
+            await _cache.RemoveAsync(CatalogCacheKeys.Product(product.Id));
+            await _cache.BumpVersionAsync();
 
             _logger.LogInformation("Product updated. Category Id:{ProductId}", product.Id);
 
@@ -221,6 +265,8 @@ namespace Catalog.Api.Services
 
             _dbContext.Products.Remove(product);
             await _dbContext.SaveChangesAsync();
+            await _cache.RemoveAsync(CatalogCacheKeys.Product(product.Id));
+            await _cache.BumpVersionAsync();
 
             _logger.LogInformation("Product deleted. Product Id:{ProductId}", id);
 

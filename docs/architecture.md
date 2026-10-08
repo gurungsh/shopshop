@@ -105,6 +105,7 @@ flowchart TB
 - Clients send a Bearer JWT. The gateway forwards it, and each service checks it itself (see [Authentication flow](#authentication-flow)).
 - HTTP is used when the caller needs an answer now. Ordering asks Catalog before it creates an order.
 - Each service owns its database. No service reads another one's.
+- Catalog caches reads in Redis, and a Redis outage falls back to the database (see [caching](caching.md)).
 
 ### Events (RabbitMQ)
 

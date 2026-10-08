@@ -39,11 +39,12 @@ Every API also exposes `GET /health`. The full endpoint list is in the [API refe
 | Logging | Serilog (console, CLEF files, request logging) |
 | API docs | Swashbuckle / Swagger UI with a Bearer scheme |
 | Testing | xUnit, Moq, EF Core InMemory provider |
-| Local infrastructure | Docker Compose (PostgreSQL + RabbitMQ with management UI) |
+| Caching | Redis 7 (Docker) via `Microsoft.Extensions.Caching.StackExchangeRedis` |
+| Local infrastructure | Docker Compose (PostgreSQL + RabbitMQ with management UI + Redis) |
 
 ## Getting started
 
-1. **Start PostgreSQL and RabbitMQ.** Create a `.env` file (see [configuration](docs/configuration.md#docker-environment)), then:
+1. **Start PostgreSQL, RabbitMQ and Redis.** Create a `.env` file (see [configuration](docs/configuration.md#docker-environment)), then:
 
    ```bash
    docker compose up -d
@@ -83,6 +84,7 @@ Other test payment methods are listed in the [API reference](docs/api.md#payment
 | [API reference](docs/api.md) | Endpoints, order rules, test payment methods |
 | [Configuration](docs/configuration.md) | Docker environment, user secrets, signing key, ports |
 | [Messaging](docs/messaging.md) | Exchanges, queues and RabbitMQ gotchas |
+| [Caching](docs/caching.md) | Redis cache-aside for Catalog: keys, TTLs, invalidation |
 | [Gateway](docs/gateway.md) | YARP API gateway: routes, combined Swagger, responsibilities |
 
 ## Roadmap
@@ -95,7 +97,7 @@ Unchecked items are not implemented yet:
 - [x] **RS256 JWT signing** with a public key published by Identity
 - [x] **API gateway** (YARP) with a combined Swagger UI, CORS, rate limiting and correlation ids
 - [x] **Pagination** for all `POST …/search` endpoints (page number, page size, total count)
-- [ ] **Redis caching** for Catalog product and category reads (cache-aside, invalidated on admin writes)
+- [x] **Redis caching** for Catalog product and category reads (cache-aside, invalidated on admin writes)
 - [ ] Integration tests with Testcontainers (PostgreSQL, RabbitMQ)
 - [ ] Identity refresh tokens and logout
 - [ ] Containerising all services

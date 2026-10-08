@@ -1,26 +1,49 @@
 ﻿using BuildingBlocks.Core;
+using Catalog.Api.Cacheing;
+using Catalog.Api.Caching;
 using Catalog.Api.DTOs;
+using Catalog.Api.Options;
 using Catalog.Infrastructure.Data;
 using Catalog.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Catalog.Api.Services
 {
     public class CategoryService : ICategoryService
     {
         private readonly CatalogDbContext _dbContext;
+        private readonly ICatalogCache _cache;
+        private readonly CacheOptions _cacheOptions;
         private readonly ILogger<CategoryService> _logger;
 
         public CategoryService(
             CatalogDbContext dbContext,
+            ICatalogCache cache,
+            IOptions<CacheOptions> cacheOptions,
             ILogger<CategoryService> logger)
         {
             _dbContext = dbContext;
+            _cache = cache;
+            _cacheOptions = cacheOptions.Value;
             _logger = logger;
         }
 
         public async Task<Result<PagedResponse<CategoryResponse>>> GetCategoriesAsync(CategoryQuery query)
         {
+            var version = await _cache.GetVersionAsync();
+            string? cacheKey = null;
+
+            if (version is not null)
+            {
+                cacheKey = CatalogCacheKeys.CategorySearch(version, query);
+                var cached = await _cache.GetAsync<PagedResponse<CategoryResponse>>(cacheKey);
+                if (cached is not null)
+                {
+                    return Result<PagedResponse<CategoryResponse>>.Success(cached);
+                }
+            }
+
             var categories = _dbContext.Categories.AsNoTracking();
 
             if (query.Ids?.Length > 0)
@@ -54,12 +77,25 @@ namespace Catalog.Api.Services
                     c.UpdatedAtUtc))
                 .ToListAsync();
 
-            return Result<PagedResponse<CategoryResponse>>.Success(
-                new PagedResponse<CategoryResponse>(items, query.Page, query.PageSize, totalCount));
+            var response = new PagedResponse<CategoryResponse>(items, query.Page, query.PageSize, totalCount);
+
+            if (cacheKey is not null)
+            {
+                await _cache.SetAsync(cacheKey, response, TimeSpan.FromMinutes(_cacheOptions.SearchTtlMinutes));
+            }
+
+            return Result<PagedResponse<CategoryResponse>>.Success(response);
         }
 
         public async Task<Result<CategoryResponse>> GetCategoryAsync(Guid id)
         {
+            var cacheKey = CatalogCacheKeys.Category(id);
+            var cached = await _cache.GetAsync<CategoryResponse>(cacheKey);
+            if (cached is not null)
+            {
+                return Result<CategoryResponse>.Success(cached);
+            }
+
             var category = await _dbContext.Categories
                 .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == id);
@@ -70,13 +106,17 @@ namespace Catalog.Api.Services
                 return Result<CategoryResponse>.Failure("Category not found.", ResultErrorType.NotFound);
             }
 
-            return Result<CategoryResponse>.Success(new CategoryResponse(
+            var response = new CategoryResponse(
                 category.Id,
                 category.Name,
                 category.Description,
                 category.IsActive,
                 category.CreatedAtUtc,
-                category.UpdatedAtUtc));
+                category.UpdatedAtUtc);
+
+            await _cache.SetAsync(cacheKey, response, TimeSpan.FromMinutes(_cacheOptions.EntityTtlMinutes));
+
+            return Result<CategoryResponse>.Success(response);
         }
 
         public async Task<Result<CategoryResponse>> CreateCategoryAsync(AdminCreateCategoryRequest request)
@@ -89,6 +129,7 @@ namespace Catalog.Api.Services
 
             _dbContext.Categories.Add(category);
             await _dbContext.SaveChangesAsync();
+            await _cache.BumpVersionAsync();
 
             _logger.LogInformation("Category created. Category Id:{CategoryId}, Name:{Name}", category.Id, category.Name);
 
@@ -130,6 +171,8 @@ namespace Catalog.Api.Services
             category.UpdatedAtUtc = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync();
+            await _cache.RemoveAsync(CatalogCacheKeys.Category(category.Id));
+            await _cache.BumpVersionAsync();
 
             _logger.LogInformation("Category updated. Category Id:{CategoryId}", category.Id);
 
@@ -155,6 +198,8 @@ namespace Catalog.Api.Services
 
             _dbContext.Categories.Remove(category);
             await _dbContext.SaveChangesAsync();
+            await _cache.RemoveAsync(CatalogCacheKeys.Category(id));
+            await _cache.BumpVersionAsync();
 
             _logger.LogInformation("Category deleted. Category Id:{CategoryId}", id);
 

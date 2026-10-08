@@ -1,4 +1,5 @@
-using System.Text;
+using Catalog.Api.Cacheing;
+using Catalog.Api.Caching;
 using Catalog.Api.Endpoints;
 using Catalog.Api.Options;
 using Catalog.Api.Services;
@@ -47,6 +48,17 @@ try
 
     builder.Services.AddDbContext<CatalogDbContext>(options =>
         options.UseNpgsql(connectionString));
+
+    var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
+        ?? throw new InvalidOperationException("Connection string 'Redis' is missing.");
+
+    builder.Services.Configure<CacheOptions>(
+        builder.Configuration.GetSection(CacheOptions.SectionName));
+
+    builder.Services.AddStackExchangeRedisCache(options =>
+        options.Configuration = redisConnectionString);
+
+    builder.Services.AddSingleton<ICatalogCache, CatalogCache>();
 
     // Authentcation and authorization
     builder.Services
