@@ -5,99 +5,98 @@ using Ordering.Api.Extensions;
 using Ordering.Api.Filters;
 using Ordering.Api.Services;
 
-namespace Ordering.Api.Endpoints
+namespace Ordering.Api.Endpoints;
+
+public static class OrderEndpoints
 {
-    public static class OrderEndpoints
+    public static IEndpointRouteBuilder MapOrderEndpoints(
+        this IEndpointRouteBuilder app)
     {
-        public static IEndpointRouteBuilder MapOrderEndpoints(
-            this IEndpointRouteBuilder app)
+        var group = app.MapGroup("/api/orders")
+            .RequireAuthorization()
+            .WithTags("Orders");
+
+        // POST /api/orders
+        group.MapPost("", async (
+            CreateOrderRequest request,
+            ClaimsPrincipal principal,
+            IOrderingService orderingService) =>
         {
-            var group = app.MapGroup("/api/orders")
-                .RequireAuthorization()
-                .WithTags("Orders");
+            var caller = principal.ToCallerContext();
+            var result = await orderingService.CreateOrderAsync(caller.UserId, request);
 
-            // POST /api/orders
-            group.MapPost("", async (
-                CreateOrderRequest request,
-                ClaimsPrincipal principal,
-                IOrderingService orderingService) =>
-            {
-                var caller = principal.ToCallerContext();
-                var result = await orderingService.CreateOrderAsync(caller.UserId, request);
+            return result.IsSuccess
+                ? Results.Created(
+                    $"/api/orders/{result.Value!.Order.Id}",
+                    result.Value)
+                : EndpointResults.ToHttpResult(result);
+        })
+        .WithName("CreateOrder")
+        .AddEndpointFilter<ValidationFilter<CreateOrderRequest>>();
 
-                return result.IsSuccess
-                    ? Results.Created(
-                        $"/api/orders/{result.Value!.Order.Id}",
-                        result.Value)
-                    : EndpointResults.ToHttpResult(result);
-            })
-            .WithName("CreateOrder")
-            .AddEndpointFilter<ValidationFilter<CreateOrderRequest>>();
+        // POST /api/orders/search
+        group.MapPost("/search", async (
+            OrderQuery query,
+            ClaimsPrincipal principal,
+            IOrderingService orderingService) =>
+        {
+            var caller = principal.ToCallerContext();
+            var result = await orderingService.GetOrdersForCustomerAsync(caller.UserId, query);
 
-            // POST /api/orders/search
-            group.MapPost("/search", async (
-                OrderQuery query,
-                ClaimsPrincipal principal,
-                IOrderingService orderingService) =>
-            {
-                var caller = principal.ToCallerContext();
-                var result = await orderingService.GetOrdersForCustomerAsync(caller.UserId, query);
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : EndpointResults.ToHttpResult(result);
+        })
+        .WithName("GetOrders")
+        .AddEndpointFilter<ValidationFilter<OrderQuery>>();
 
-                return result.IsSuccess
-                    ? Results.Ok(result.Value)
-                    : EndpointResults.ToHttpResult(result);
-            })
-            .WithName("GetOrders")
-            .AddEndpointFilter<ValidationFilter<OrderQuery>>();
+        // GET /api/orders/{id}
+        group.MapGet("/{id:guid}", async (
+            Guid id,
+            ClaimsPrincipal principal,
+            IOrderingService orderingService) =>
+        {
+            var caller = principal.ToCallerContext();
+            var result = await orderingService.GetOrderForCustomerAsync(caller.UserId, id);
 
-            // GET /api/orders/{id}
-            group.MapGet("/{id:guid}", async (
-                Guid id,
-                ClaimsPrincipal principal,
-                IOrderingService orderingService) =>
-            {
-                var caller = principal.ToCallerContext();
-                var result = await orderingService.GetOrderForCustomerAsync(caller.UserId, id);
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : EndpointResults.ToHttpResult(result);
+        })
+        .WithName("GetOrder");
 
-                return result.IsSuccess
-                    ? Results.Ok(result.Value)
-                    : EndpointResults.ToHttpResult(result);
-            })
-            .WithName("GetOrder");
+        // POST /api/orders/{id}/cancel
+        group.MapPost("/{id:guid}/cancel", async (
+            Guid id,
+            ClaimsPrincipal principal,
+            IOrderingService orderingService) =>
+        {
+            var caller = principal.ToCallerContext();
+            var result = await orderingService.CancelOrderForCustomerAsync(caller.UserId, id);
 
-            // POST /api/orders/{id}/cancel
-            group.MapPost("/{id:guid}/cancel", async (
-                Guid id,
-                ClaimsPrincipal principal,
-                IOrderingService orderingService) =>
-            {
-                var caller = principal.ToCallerContext();
-                var result = await orderingService.CancelOrderForCustomerAsync(caller.UserId, id);
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : EndpointResults.ToHttpResult(result);
+        })
+        .WithName("CancelOrder");
 
-                return result.IsSuccess
-                    ? Results.Ok(result.Value)
-                    : EndpointResults.ToHttpResult(result);
-            })
-            .WithName("CancelOrder");
+        // POST /api/orders/{id}/retry-payment
+        group.MapPost("/{id:guid}/retry-payment", async (
+            Guid id,
+            RetryOrderPaymentRequest request,
+            ClaimsPrincipal principal,
+            IOrderingService orderingService) =>
+        {
+            var caller = principal.ToCallerContext();
+            var result = await orderingService.RetryOrderPaymentAsync(caller.UserId, id, request);
 
-            // POST /api/orders/{id}/retry-payment
-            group.MapPost("/{id:guid}/retry-payment", async (
-                Guid id,
-                RetryOrderPaymentRequest request,
-                ClaimsPrincipal principal,
-                IOrderingService orderingService) =>
-            {
-                var caller = principal.ToCallerContext();
-                var result = await orderingService.RetryOrderPaymentAsync(caller.UserId, id, request);
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : EndpointResults.ToHttpResult(result);
+        })
+        .WithName("RetryOrderPayment")
+        .AddEndpointFilter<ValidationFilter<RetryOrderPaymentRequest>>();
 
-                return result.IsSuccess
-                    ? Results.Ok(result.Value)
-                    : EndpointResults.ToHttpResult(result);
-            })
-            .WithName("RetryOrderPayment")
-            .AddEndpointFilter<ValidationFilter<RetryOrderPaymentRequest>>();
-
-            return app;
-        }
+        return app;
     }
 }

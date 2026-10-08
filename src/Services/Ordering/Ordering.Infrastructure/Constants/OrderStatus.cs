@@ -1,15 +1,14 @@
-﻿namespace Ordering.Infrastructure.Constants
+﻿namespace Ordering.Infrastructure.Constants;
+
+public enum OrderStatus
 {
-    public enum OrderStatus
-    {
-        Pending,
-        Confirmed,
-        Processing,
-        Shipped,
-        Delivered,
-        Cancelled,
-        Refunded,
-        Failed,
-        PaymentFailed
-    }
+    Pending,
+    Confirmed,
+    Processing,
+    Shipped,
+    Delivered,
+    Cancelled,
+    Refunded,
+    Failed,
+    PaymentFailed
 }

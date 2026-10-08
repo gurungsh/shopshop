@@ -2,33 +2,32 @@ using BuildingBlocks.Core;
 using FluentValidation;
 using Ordering.Api.DTOs;
 
-namespace Ordering.Api.Validators
+namespace Ordering.Api.Validators;
+
+public sealed class CreateOrderRequestValidator : AbstractValidator<CreateOrderRequest>
 {
-    public sealed class CreateOrderRequestValidator : AbstractValidator<CreateOrderRequest>
+    public CreateOrderRequestValidator()
     {
-        public CreateOrderRequestValidator()
+        RuleFor(x => x.ShippingAddress)
+            .NotEmpty().WithMessage("Shipping address is required.")
+            .MaximumLength(500).WithMessage("Shipping address must not exceed 500 characters.");
+
+        RuleFor(x => x.PaymentMethodId)
+            .NotEmpty().WithMessage("Payment method id is required.")
+            .Matches(PaymentMethodIdRules.Pattern).WithMessage(PaymentMethodIdRules.Message);
+
+        RuleFor(x => x.Items)
+            .NotEmpty().WithMessage("At least one item is required.")
+            .Must(items => items is null || items.Length <= PagingDefaults.MaxPageSize)
+            .WithMessage($"An order can contain at most {PagingDefaults.MaxPageSize} items.");
+
+        RuleForEach(x => x.Items).ChildRules(item =>
         {
-            RuleFor(x => x.ShippingAddress)
-                .NotEmpty().WithMessage("Shipping address is required.")
-                .MaximumLength(500).WithMessage("Shipping address must not exceed 500 characters.");
+            item.RuleFor(i => i.ProductId)
+                .NotEmpty().WithMessage("Product id is required.");
 
-            RuleFor(x => x.PaymentMethodId)
-                .NotEmpty().WithMessage("Payment method id is required.")
-                .Matches(PaymentMethodIdRules.Pattern).WithMessage(PaymentMethodIdRules.Message);
-
-            RuleFor(x => x.Items)
-                .NotEmpty().WithMessage("At least one item is required.")
-                .Must(items => items is null || items.Length <= PagingDefaults.MaxPageSize)
-                .WithMessage($"An order can contain at most {PagingDefaults.MaxPageSize} items.");
-
-            RuleForEach(x => x.Items).ChildRules(item =>
-            {
-                item.RuleFor(i => i.ProductId)
-                    .NotEmpty().WithMessage("Product id is required.");
-
-                item.RuleFor(i => i.Quantity)
-                    .GreaterThan(0).WithMessage("Quantity must be greater than 0.");
-            });
-        }
+            item.RuleFor(i => i.Quantity)
+                .GreaterThan(0).WithMessage("Quantity must be greater than 0.");
+        });
     }
 }

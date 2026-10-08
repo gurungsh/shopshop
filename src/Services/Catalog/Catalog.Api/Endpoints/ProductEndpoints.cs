@@ -3,44 +3,43 @@ using Catalog.Api.DTOs;
 using Catalog.Api.Filters;
 using Catalog.Api.Services;
 
-namespace Catalog.Api.Endpoints
+namespace Catalog.Api.Endpoints;
+
+public static class ProductEndpoints
 {
-    public static class ProductEndpoints
+    public static IEndpointRouteBuilder MapProductEndpoints(
+        this IEndpointRouteBuilder app)
     {
-        public static IEndpointRouteBuilder MapProductEndpoints(
-            this IEndpointRouteBuilder app)
+        var group = app.MapGroup("/api/products")
+            .WithTags("Product");
+
+        // POST /api/products/search
+        group.MapPost("/search", async (
+            ProductQuery query,
+            IProductService productService) =>
         {
-            var group = app.MapGroup("/api/products")
-                .WithTags("Product");
+            var result = await productService.GetProductsAsync(query);
 
-            // POST /api/products/search
-            group.MapPost("/search", async (
-                ProductQuery query,
-                IProductService productService) =>
-            {
-                var result = await productService.GetProductsAsync(query);
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : EndpointResults.ToHttpResult(result);
+        })
+        .WithName("GetProducts")
+        .AddEndpointFilter<ValidationFilter<ProductQuery>>();
 
-                return result.IsSuccess
-                    ? Results.Ok(result.Value)
-                    : EndpointResults.ToHttpResult(result);
-            })
-            .WithName("GetProducts")
-            .AddEndpointFilter<ValidationFilter<ProductQuery>>();
+        // GET /api/products/{id}
+        group.MapGet("/{id:guid}", async (
+            Guid id,
+            IProductService productService) =>
+        {
+            var result = await productService.GetProductAsync(id);
 
-            // GET /api/products/{id}
-            group.MapGet("/{id:guid}", async (
-                Guid id,
-                IProductService productService) =>
-            {
-                var result = await productService.GetProductAsync(id);
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : EndpointResults.ToHttpResult(result);
+        })
+        .WithName("GetProduct");
 
-                return result.IsSuccess
-                    ? Results.Ok(result.Value)
-                    : EndpointResults.ToHttpResult(result);
-            })
-            .WithName("GetProduct");
-
-            return app;
-        }
+        return app;
     }
 }

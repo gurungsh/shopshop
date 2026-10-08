@@ -1,7 +1,6 @@
-namespace Ordering.Infrastructure.Constants
+namespace Ordering.Infrastructure.Constants;
+
+public static class OrderFieldLengths
 {
-    public static class OrderFieldLengths
-    {
-        public const int PaymentFailureReason = 500;
-    }
+    public const int PaymentFailureReason = 500;
 }

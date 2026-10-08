@@ -1,11 +1,10 @@
 ﻿using Identity.Api.DTOs;
 using Microsoft.IdentityModel.Tokens;
 
-namespace Identity.Api.Security
+namespace Identity.Api.Security;
+
+public interface IJwtKeyProvider
 {
-    public interface IJwtKeyProvider
-    {
-        SecurityKey SigningKey { get; }
-        JwksResponse GetJwks();
-    }
+    SecurityKey SigningKey { get; }
+    JwksResponse GetJwks();
 }

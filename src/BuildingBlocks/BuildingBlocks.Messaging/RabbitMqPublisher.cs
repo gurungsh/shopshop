@@ -1,98 +1,97 @@
 ﻿using RabbitMQ.Client;
 
-namespace BuildingBlocks.Messaging
+namespace BuildingBlocks.Messaging;
+
+public sealed class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
 {
-    public sealed class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
+    private readonly RabbitMqConnection _connection;
+    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly HashSet<string> _declareExchanges = [];
+    private IChannel? _channel;
+
+    public RabbitMqPublisher(RabbitMqConnection connection)
     {
-        private readonly RabbitMqConnection _connection;
-        private readonly SemaphoreSlim _lock = new(1, 1);
-        private readonly HashSet<string> _declareExchanges = [];
-        private IChannel? _channel;
+        _connection = connection;
+    }
 
-        public RabbitMqPublisher(RabbitMqConnection connection)
+    public async Task PublishAsync(
+        string exchange,
+        string routingKey,
+        string messageId,
+        ReadOnlyMemory<byte> body,
+        CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
         {
-            _connection = connection;
-        }
+            var channel = await GetChannelAsync(cancellationToken);
 
-        public async Task PublishAsync(
-            string exchange,
-            string routingKey,
-            string messageId,
-            ReadOnlyMemory<byte> body,
-            CancellationToken cancellationToken = default)
-        {
-            await _lock.WaitAsync(cancellationToken);
-            try
+            if (!_declareExchanges.Contains(exchange))
             {
-                var channel = await GetChannelAsync(cancellationToken);
-
-                if (!_declareExchanges.Contains(exchange))
-                {
-                    await channel.ExchangeDeclareAsync(
-                        exchange: exchange,
-                        type: ExchangeType.Topic,
-                        durable: true,
-                        autoDelete: false,
-                        cancellationToken: cancellationToken);
-
-                    _declareExchanges.Add(exchange);
-                }
-
-                var properties = new BasicProperties
-                {
-                    MessageId = messageId,
-                    Type = routingKey,
-                    ContentType = "application/json",
-                    DeliveryMode = DeliveryModes.Persistent,
-                    Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds())
-                };
-
-                await channel.BasicPublishAsync(
+                await channel.ExchangeDeclareAsync(
                     exchange: exchange,
-                    routingKey: routingKey,
-                    mandatory: true,
-                    basicProperties: properties,
-                    body: body,
+                    type: ExchangeType.Topic,
+                    durable: true,
+                    autoDelete: false,
                     cancellationToken: cancellationToken);
+
+                _declareExchanges.Add(exchange);
             }
-            finally
+
+            var properties = new BasicProperties
             {
-                _lock.Release();
-            }
+                MessageId = messageId,
+                Type = routingKey,
+                ContentType = "application/json",
+                DeliveryMode = DeliveryModes.Persistent,
+                Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            };
+
+            await channel.BasicPublishAsync(
+                exchange: exchange,
+                routingKey: routingKey,
+                mandatory: true,
+                basicProperties: properties,
+                body: body,
+                cancellationToken: cancellationToken);
         }
-
-        private async Task<IChannel> GetChannelAsync(CancellationToken cancellationToken)
+        finally
         {
-            if (_channel is { IsOpen: true })
-            {
-                return _channel;
-            }
+            _lock.Release();
+        }
+    }
 
-            if (_channel is not null)
-            {
-                await _channel.DisposeAsync();
-                _declareExchanges.Clear();
-            }
-
-            var connection = await _connection.GetConnectionAsync(cancellationToken);
-
-            _channel = await connection.CreateChannelAsync(
-                new CreateChannelOptions(
-                    publisherConfirmationsEnabled: true,
-                    publisherConfirmationTrackingEnabled: true),
-                cancellationToken);
-
+    private async Task<IChannel> GetChannelAsync(CancellationToken cancellationToken)
+    {
+        if (_channel is { IsOpen: true })
+        {
             return _channel;
         }
 
-        public async ValueTask DisposeAsync()
+        if (_channel is not null)
         {
-            if (_channel is not null)
-            {
-                await _channel.DisposeAsync();
-            }
-
-            _lock.Dispose();
+            await _channel.DisposeAsync();
+            _declareExchanges.Clear();
         }
+
+        var connection = await _connection.GetConnectionAsync(cancellationToken);
+
+        _channel = await connection.CreateChannelAsync(
+            new CreateChannelOptions(
+                publisherConfirmationsEnabled: true,
+                publisherConfirmationTrackingEnabled: true),
+            cancellationToken);
+
+        return _channel;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_channel is not null)
+        {
+            await _channel.DisposeAsync();
+        }
+
+        _lock.Dispose();
     }
 }

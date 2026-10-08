@@ -2,20 +2,19 @@
 using BuildingBlocks.Core;
 using Identity.Api.DTOs;
 
-namespace Identity.Api.Services
+namespace Identity.Api.Services;
+
+public interface IAuthService
 {
-    public interface IAuthService
-    {
-        Task<Result<AuthResponse>> RegisterAsync(RegisterRequest request);
-        Task<Result<AuthResponse>> LoginAsync(LoginRequest request);
-        Task<Result<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request);
-        Task<Result<bool>> LogoutAsync(ClaimsPrincipal principal);
-        Task<Result<UserResponse>> GetCurrentUserAsync(ClaimsPrincipal principal);
-        Task<Result<UserResponse>> UpdateCurrentUserAsync(ClaimsPrincipal principal, UpdateCurrentUserRequest request);
-        Task<Result<PagedResponse<UserResponse>>> GetUsersAsync(UserQuery query);
-        Task<Result<UserResponse>> GetUserAsync(Guid id);
-        Task<Result<UserResponse>> CreateUserAsync(AdminCreateUserRequest request);
-        Task<Result<UserResponse>> UpdateUserAsync(Guid id, AdminUpdateUserRequest request);
-        Task<Result<bool>> DeleteUserAsync(Guid id);
-    }
+    Task<Result<AuthResponse>> RegisterAsync(RegisterRequest request);
+    Task<Result<AuthResponse>> LoginAsync(LoginRequest request);
+    Task<Result<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request);
+    Task<Result<bool>> LogoutAsync(ClaimsPrincipal principal);
+    Task<Result<UserResponse>> GetCurrentUserAsync(ClaimsPrincipal principal);
+    Task<Result<UserResponse>> UpdateCurrentUserAsync(ClaimsPrincipal principal, UpdateCurrentUserRequest request);
+    Task<Result<PagedResponse<UserResponse>>> GetUsersAsync(UserQuery query);
+    Task<Result<UserResponse>> GetUserAsync(Guid id);
+    Task<Result<UserResponse>> CreateUserAsync(AdminCreateUserRequest request);
+    Task<Result<UserResponse>> UpdateUserAsync(Guid id, AdminUpdateUserRequest request);
+    Task<Result<bool>> DeleteUserAsync(Guid id);
 }

@@ -1,12 +1,11 @@
-namespace Ordering.Api.Options
-{
-    public record JwtOptions
-    {
-        public const string SectionName = "JwtSettings";
+namespace Ordering.Api.Options;
 
-        public string MetadataAddress { get; init; } = string.Empty;
-        public string Issuer { get; set; } = string.Empty;
-        public string Audience { get; set; } = string.Empty;
-        public int ExpirationInMinutes { get; set; } = 60;
-    }
+public record JwtOptions
+{
+    public const string SectionName = "JwtSettings";
+
+    public string MetadataAddress { get; init; } = string.Empty;
+    public string Issuer { get; set; } = string.Empty;
+    public string Audience { get; set; } = string.Empty;
+    public int ExpirationInMinutes { get; set; } = 60;
 }
