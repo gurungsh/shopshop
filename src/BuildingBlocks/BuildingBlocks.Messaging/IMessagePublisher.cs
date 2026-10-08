@@ -1,12 +1,11 @@
-﻿namespace BuildingBlocks.Messaging
+﻿namespace BuildingBlocks.Messaging;
+
+public interface IMessagePublisher
 {
-    public interface IMessagePublisher
-    {
-        Task PublishAsync(
-            string exchange,
-            string routingKey,
-            string messageId,
-            ReadOnlyMemory<byte> body,
-            CancellationToken cancellationToken = default);
-    }
+    Task PublishAsync(
+        string exchange,
+        string routingKey,
+        string messageId,
+        ReadOnlyMemory<byte> body,
+        CancellationToken cancellationToken = default);
 }

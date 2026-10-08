@@ -1,8 +1,7 @@
-﻿namespace Payment.Infrastructure.Constants
+﻿namespace Payment.Infrastructure.Constants;
+
+public enum PaymentStatus
 {
-    public enum PaymentStatus
-    {
-        Succeeded,
-        Failed
-    }
+    Succeeded,
+    Failed
 }

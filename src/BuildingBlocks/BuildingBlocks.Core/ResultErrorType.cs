@@ -1,12 +1,11 @@
-namespace BuildingBlocks.Core
+namespace BuildingBlocks.Core;
+
+public enum ResultErrorType
 {
-    public enum ResultErrorType
-    {
-        None,
-        BadRequest,
-        Unauthorized,
-        NotFound,
-        Conflict,
-        ServiceUnavailable
-    }
+    None,
+    BadRequest,
+    Unauthorized,
+    NotFound,
+    Conflict,
+    ServiceUnavailable
 }

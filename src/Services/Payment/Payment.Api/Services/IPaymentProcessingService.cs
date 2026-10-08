@@ -1,10 +1,9 @@
 using BuildingBlocks.Core;
 using Payment.Api.DTOs;
 
-namespace Payment.Api.Services
+namespace Payment.Api.Services;
+
+public interface IPaymentProcessingService
 {
-    public interface IPaymentProcessingService
-    {
-        Task<Result<bool>> ProcessPaymentAsync(PaymentChargeRequest request, CancellationToken cancellationToken = default);
-    }
+    Task<Result<bool>> ProcessPaymentAsync(PaymentChargeRequest request, CancellationToken cancellationToken = default);
 }

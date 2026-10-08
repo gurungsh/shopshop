@@ -1,9 +1,8 @@
-namespace Ordering.Api.Options
-{
-    public record PaymentOptions
-    {
-        public const string SectionName = "Payment";
+namespace Ordering.Api.Options;
 
-        public int MaxRetries { get; init; } = 3;
-    }
+public record PaymentOptions
+{
+    public const string SectionName = "Payment";
+
+    public int MaxRetries { get; init; } = 3;
 }
