@@ -1,10 +1,14 @@
 ﻿using BuildingBlocks.Core;
+using Catalog.Api.Cacheing;
+using Catalog.Api.Caching;
 using Catalog.Api.DTOs;
+using Catalog.Api.Options;
 using Catalog.Api.Services;
 using Catalog.Infrastructure.Data;
 using Catalog.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Catalog.Api.UnitTests
@@ -13,6 +17,8 @@ namespace Catalog.Api.UnitTests
     {
         private readonly ProductService _productService;
         private readonly CatalogDbContext _dbContext;
+        private readonly Mock<ICatalogCache> _cache;
+        private readonly IOptions<CacheOptions> _cacheOptions;
         private readonly Mock<ILogger<ProductService>> _mockLogger;
 
         public ProductServiceTests()
@@ -22,9 +28,11 @@ namespace Catalog.Api.UnitTests
                 .Options;
 
             _dbContext = new CatalogDbContext(options);
+            _cache = new Mock<ICatalogCache>();
+            _cacheOptions = new OptionsWrapper<CacheOptions>(new CacheOptions());
             _mockLogger = new Mock<ILogger<ProductService>>();
 
-            _productService = new ProductService(_dbContext, _mockLogger.Object);
+            _productService = new ProductService(_dbContext, _cache.Object, _cacheOptions, _mockLogger.Object);
         }
 
         private static Product CreateTestProduct(
@@ -733,6 +741,115 @@ namespace Catalog.Api.UnitTests
             Assert.False(result.IsSuccess);
             Assert.Equal("Product not found.", result.Error);
             Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+        }
+
+        #endregion
+
+        #region Caching Tests
+
+        [Fact]
+        public async Task GetProductAsync_WhenCached_ShouldReturnCachedValueWithoutQueryingDatabase()
+        {
+            // Arrange
+            var id = Guid.NewGuid();
+            var cached = new ProductResponse(id, Guid.NewGuid(), "Cached", "Desc", "SKU-C", 9.99m, true, DateTime.UtcNow, DateTime.UtcNow);
+            _cache.Setup(c => c.GetAsync<ProductResponse>(CatalogCacheKeys.Product(id))).ReturnsAsync(cached);
+
+            // Act
+            var result = await _productService.GetProductAsync(id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal("Cached", result.Value!.Name);
+        }
+
+        [Fact]
+        public async Task GetProductAsync_OnCacheMiss_ShouldStoreResultInCache()
+        {
+            // Arrange
+            var category = new Category { Name = "Shoes", Description = "Footwear" };
+            var product = CreateTestProduct(category.Id);
+            _dbContext.Categories.Add(category);
+            _dbContext.Products.Add(product);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _productService.GetProductAsync(product.Id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            _cache.Verify(c => c.SetAsync(
+                CatalogCacheKeys.Product(product.Id),
+                It.IsAny<ProductResponse>(),
+                It.IsAny<TimeSpan>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetProductAsync_WhenNotFound_ShouldNotCacheAnything()
+        {
+            // Act
+            var result = await _productService.GetProductAsync(Guid.NewGuid());
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            _cache.Verify(c => c.SetAsync(
+                It.IsAny<string>(),
+                It.IsAny<ProductResponse>(),
+                It.IsAny<TimeSpan>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task GetProductsAsync_WhenCacheUnavailable_ShouldStillReturnFromDatabase()
+        {
+            // Arrange
+            var category = new Category { Name = "Shoes", Description = "Footwear" };
+            _dbContext.Categories.Add(category);
+            _dbContext.Products.Add(CreateTestProduct(category.Id));
+            await _dbContext.SaveChangesAsync();
+            _cache.Setup(c => c.GetVersionAsync()).ReturnsAsync((string?)null);
+
+            // Act
+            var result = await _productService.GetProductsAsync(new ProductQuery());
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Single(result.Value!.Items);
+        }
+
+        [Fact]
+        public async Task CreateProductAsync_ShouldBumpCatalogVersion()
+        {
+            // Arrange
+            var category = new Category { Name = "Shoes", Description = "Footwear" };
+            _dbContext.Categories.Add(category);
+            await _dbContext.SaveChangesAsync();
+            var request = new AdminCreateProductRequest(category.Id, "Shoe", "Desc", "SKU-NEW", 20m);
+
+            // Act
+            var result = await _productService.CreateProductAsync(request);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteProductAsync_ShouldRemoveEntryAndBumpVersion()
+        {
+            // Arrange
+            var category = new Category { Name = "Shoes", Description = "Footwear" };
+            var product = CreateTestProduct(category.Id);
+            _dbContext.Categories.Add(category);
+            _dbContext.Products.Add(product);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _productService.DeleteProductAsync(product.Id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            _cache.Verify(c => c.RemoveAsync(CatalogCacheKeys.Product(product.Id)), Times.Once);
+            _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
         }
 
         #endregion

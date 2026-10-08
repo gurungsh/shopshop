@@ -1,10 +1,14 @@
 ﻿using BuildingBlocks.Core;
+using Catalog.Api.Cacheing;
+using Catalog.Api.Caching;
 using Catalog.Api.DTOs;
+using Catalog.Api.Options;
 using Catalog.Api.Services;
 using Catalog.Infrastructure.Data;
 using Catalog.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Catalog.Api.UnitTests
@@ -13,6 +17,8 @@ namespace Catalog.Api.UnitTests
     {
         private readonly CategoryService _categoryService;
         private readonly CatalogDbContext _dbContext;
+        private readonly Mock<ICatalogCache> _cache;
+        private readonly IOptions<CacheOptions> _cacheOptions;
         private readonly Mock<ILogger<CategoryService>> _mockLogger;
 
         public CategoryServiceTests()
@@ -22,9 +28,11 @@ namespace Catalog.Api.UnitTests
                 .Options;
 
             _dbContext = new CatalogDbContext(options);
+            _cache = new Mock<ICatalogCache>();
+            _cacheOptions = new OptionsWrapper<CacheOptions>(new CacheOptions());
             _mockLogger = new Mock<ILogger<CategoryService>>();
 
-            _categoryService = new CategoryService(_dbContext, _mockLogger.Object);
+            _categoryService = new CategoryService(_dbContext, _cache.Object, _cacheOptions, _mockLogger.Object);
         }
 
         #region GetCategoriesAsync Tests
@@ -602,6 +610,155 @@ namespace Catalog.Api.UnitTests
             Assert.False(result.IsSuccess);
             Assert.Equal("Category not found.", result.Error);
             Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+        }
+
+        #endregion
+
+        #region Caching Tests
+
+        [Fact]
+        public async Task GetCategoryAsync_WhenCached_ShouldReturnCachedValue()
+        {
+            // Arrange
+            var id = Guid.NewGuid();
+            var cached = new CategoryResponse(id, "Cached", "Desc", true, DateTime.UtcNow, DateTime.UtcNow);
+            _cache.Setup(c => c.GetAsync<CategoryResponse>(CatalogCacheKeys.Category(id))).ReturnsAsync(cached);
+
+            // Act
+            var result = await _categoryService.GetCategoryAsync(id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal("Cached", result.Value!.Name);
+        }
+
+        [Fact]
+        public async Task GetCategoryAsync_OnCacheMiss_ShouldStoreResultInCache()
+        {
+            // Arrange
+            var category = new Category { Name = "Books", Description = "Reading material" };
+            _dbContext.Categories.Add(category);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _categoryService.GetCategoryAsync(category.Id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            _cache.Verify(c => c.SetAsync(
+                CatalogCacheKeys.Category(category.Id),
+                It.IsAny<CategoryResponse>(),
+                It.IsAny<TimeSpan>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetCategoryAsync_WhenNotFound_ShouldNotCacheAnything()
+        {
+            // Act
+            var result = await _categoryService.GetCategoryAsync(Guid.NewGuid());
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            _cache.Verify(c => c.SetAsync(
+                It.IsAny<string>(),
+                It.IsAny<CategoryResponse>(),
+                It.IsAny<TimeSpan>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task GetCategoriesAsync_WhenCached_ShouldReturnCachedPage()
+        {
+            // Arrange
+            var query = new CategoryQuery();
+            var cached = new PagedResponse<CategoryResponse>(
+                new List<CategoryResponse>
+                {
+                    new(Guid.NewGuid(), "Cached", "Desc", true, DateTime.UtcNow, DateTime.UtcNow)
+                },
+                query.Page, query.PageSize, 1);
+            _cache.Setup(c => c.GetVersionAsync()).ReturnsAsync("v1");
+            _cache.Setup(c => c.GetAsync<PagedResponse<CategoryResponse>>(CatalogCacheKeys.CategorySearch("v1", query)))
+                .ReturnsAsync(cached);
+
+            // Act
+            var result = await _categoryService.GetCategoriesAsync(query);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal("Cached", result.Value!.Items.Single().Name);
+        }
+
+        [Fact]
+        public async Task GetCategoriesAsync_WhenCacheUnavailable_ShouldStillReturnFromDatabase()
+        {
+            // Arrange
+            _dbContext.Categories.Add(new Category { Name = "Books", Description = "Reading material" });
+            await _dbContext.SaveChangesAsync();
+            _cache.Setup(c => c.GetVersionAsync()).ReturnsAsync((string?)null);
+
+            // Act
+            var result = await _categoryService.GetCategoriesAsync(new CategoryQuery());
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Single(result.Value!.Items);
+        }
+
+        [Fact]
+        public async Task CreateCategoryAsync_ShouldBumpCatalogVersion()
+        {
+            // Act
+            var result = await _categoryService.CreateCategoryAsync(new AdminCreateCategoryRequest("Books", "Reading"));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateCategoryAsync_ShouldRemoveEntryAndBumpVersion()
+        {
+            // Arrange
+            var category = new Category { Name = "Books", Description = "Reading material" };
+            _dbContext.Categories.Add(category);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _categoryService.UpdateCategoryAsync(category.Id, new AdminUpdateCategoryRequest(Name: "Novels"));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            _cache.Verify(c => c.RemoveAsync(CatalogCacheKeys.Category(category.Id)), Times.Once);
+            _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateCategoryAsync_WhenNotFound_ShouldNotInvalidateCache()
+        {
+            // Act
+            var result = await _categoryService.UpdateCategoryAsync(Guid.NewGuid(), new AdminUpdateCategoryRequest(Name: "Novels"));
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            _cache.Verify(c => c.RemoveAsync(It.IsAny<string>()), Times.Never);
+            _cache.Verify(c => c.BumpVersionAsync(), Times.Never);
+        }
+
+        [Fact]
+        public async Task DeleteCategoryAsync_ShouldRemoveEntryAndBumpVersion()
+        {
+            // Arrange
+            var category = new Category { Name = "Books", Description = "Reading material" };
+            _dbContext.Categories.Add(category);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _categoryService.DeleteCategoryAsync(category.Id);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            _cache.Verify(c => c.RemoveAsync(CatalogCacheKeys.Category(category.Id)), Times.Once);
+            _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
         }
 
         #endregion
