@@ -14,7 +14,7 @@ namespace BuildingBlocks.Messaging
             var options = section.Get<RabbitMqOptions>()
                 ?? throw new InvalidOperationException("RabbitMq configuration is missing.");
 
-            if(string.IsNullOrWhiteSpace(options.HostName)
+            if (string.IsNullOrWhiteSpace(options.HostName)
                 || string.IsNullOrWhiteSpace(options.UserName)
                 || string.IsNullOrWhiteSpace(options.Password))
             {

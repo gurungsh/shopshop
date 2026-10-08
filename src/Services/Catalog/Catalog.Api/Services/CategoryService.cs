@@ -1,7 +1,7 @@
-﻿using Catalog.Api.DTOs;
+﻿using BuildingBlocks.Core;
+using Catalog.Api.DTOs;
 using Catalog.Infrastructure.Data;
 using Catalog.Infrastructure.Models;
-using BuildingBlocks.Core;
 using Microsoft.EntityFrameworkCore;
 
 namespace Catalog.Api.Services
@@ -82,7 +82,7 @@ namespace Catalog.Api.Services
 
             _dbContext.Categories.Add(category);
             await _dbContext.SaveChangesAsync();
-            
+
             _logger.LogInformation("Category created. Category Id:{CategoryId}, Name:{Name}", category.Id, category.Name);
 
             return Result<CategoryResponse>.Success(new CategoryResponse(
@@ -123,7 +123,7 @@ namespace Catalog.Api.Services
             category.UpdatedAtUtc = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync();
-            
+
             _logger.LogInformation("Category updated. Category Id:{CategoryId}", category.Id);
 
             return Result<CategoryResponse>.Success(new CategoryResponse(

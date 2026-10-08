@@ -44,7 +44,7 @@ namespace Catalog.Infrastructure.Configurations
                 .IsRequired()
                 .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("now()");
-            
+
             builder.HasOne<Category>()
                 .WithMany()
                 .HasForeignKey(p => p.CategoryId)

@@ -23,7 +23,7 @@ try
     var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
         ?? throw new InvalidOperationException("Cors:AllowedOrigins is not configured.");
 
-    if (allowedOrigins.Length ==0)
+    if (allowedOrigins.Length == 0)
     {
         throw new InvalidOperationException("Cors:AllowedOrigins must contain at least one origin.");
     }
