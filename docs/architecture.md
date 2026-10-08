@@ -22,6 +22,8 @@ ShopShop/
 │   │   ├── BuildingBlocks.Web          # EndpointResults.ToHttpResult
 │   │   ├── BuildingBlocks.Contracts    # integration events + routing keys (Orders/, Payments/)
 │   │   └── BuildingBlocks.Messaging    # RabbitMQ connection, publisher, consumer base, topology
+│   ├── Gateway/
+│   │   └── Gateway.Api                 # YARP reverse proxy, combined dev Swagger
 │   └── Services/
 │       ├── Identity/
 │       │   ├── Identity.Api
@@ -38,6 +40,7 @@ ShopShop/
 │       └── Notification/
 │           └── Notification.Api
 ├── tests/
+│   ├── Gateway/Gateway.Api.UnitTests
 │   └── Services/
 │       ├── Identity/Identity.Api.UnitTests
 │       ├── Catalog/Catalog.Api.UnitTests
@@ -75,6 +78,7 @@ Differences from that shape:
 - **Identity.Api** adds `Security/` (`IJwtKeyProvider`, `JwtKeyProvider`) for the signing key and the public JWKS.
 - **Payment.Api** has no `Endpoints/`. It has `Messaging/` (`OutboxPublisher`, `OrderEventsConsumer`) instead.
 - **Notification.Api** has no Infrastructure project, because it stores nothing yet. It has `Messaging/` (`OrderEventsConsumer`), `Services/` (`NotificationService`) and `Program.cs`.
+- **Gateway.Api** is not a service: it has no database or business logic, so it sits in `src/Gateway/` with one project. It has `Middleware/` (`CorrelationIdMiddleware`), `Program.cs` and the routes in `appsettings.json`. See [gateway](gateway.md).
 
 ## Architecture overview
 
@@ -85,17 +89,20 @@ Two small diagrams: how requests flow, and how events flow.
 ```mermaid
 flowchart TB
     client([Client])
+    gateway["Gateway.Api<br/>YARP"]
     identity["Identity.Api<br/>AuthDb"]
     catalog["Catalog.Api<br/>CatalogDb"]
     ordering["Ordering.Api<br/>OrderDb"]
 
-    client -- "login" --> identity
-    client -- "browse products" --> catalog
-    client -- "place and track orders" --> ordering
+    client --> gateway
+    gateway -- "login" --> identity
+    gateway -- "browse products" --> catalog
+    gateway -- "place and track orders" --> ordering
     ordering -- "HTTP + resilience:<br/>names, prices, active state" --> catalog
 ```
 
-- Clients send a Bearer JWT to Catalog and Ordering. The services check it themselves (see [Authentication flow](#authentication-flow)).
+- Clients talk to the gateway only. It routes by path prefix and adds CORS, rate limiting and a correlation id (see [gateway](gateway.md)). Service-to-service calls bypass it.
+- Clients send a Bearer JWT. The gateway forwards it, and each service checks it itself (see [Authentication flow](#authentication-flow)).
 - HTTP is used when the caller needs an answer now. Ordering asks Catalog before it creates an order.
 - Each service owns its database. No service reads another one's.
 

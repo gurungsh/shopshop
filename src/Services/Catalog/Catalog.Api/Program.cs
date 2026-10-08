@@ -152,7 +152,7 @@ try
     app.UseAuthorization();
 
     // Endpoint routing 
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Catalog.Api" })).WithTags("Health");
+    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Catalog.Api" })).ExcludeFromDescription();
     app.MapCategoryEndpoints();
     app.MapAdminCategoryEndpoints();
     app.MapProductEndpoints();

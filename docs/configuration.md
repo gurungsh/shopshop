@@ -76,6 +76,9 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out ~/shopshop-key
 | Ordering | https://localhost:7055, http://localhost:5077 | `/swagger` |
 | Payment | https://localhost:7075, http://localhost:5051 | none (`/health` only) |
 | Notification | https://localhost:7062, http://localhost:5062 | none (`/health` only) |
+| Gateway | https://localhost:7080, http://localhost:5080 | `/swagger` (combined, Development only) |
 | RabbitMQ management | http://localhost:15672 | |
+
+The gateway calls Identity, Catalog and Ordering on their HTTPS ports, so run those with the `https` profile. Its addresses and `Cors:AllowedOrigins` are in `Gateway.Api/appsettings.json` and are not secret.
 
 Run a service with the `https` profile, for example `dotnet run --project src/Services/Identity/Identity.Api --launch-profile https`. Migrations are applied automatically on startup in Development.

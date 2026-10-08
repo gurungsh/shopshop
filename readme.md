@@ -21,6 +21,7 @@ Customers place orders, Payment charges them through Stripe (test mode), and Ord
 | Ordering | Orders and their status. Publishes order events, applies payment results | 7055 |
 | Payment | Charges orders through Stripe. Event-driven, `/health` only | 7075 |
 | Notification | Logs order updates for now. Event-driven, `/health` only | 7062 |
+| Gateway | YARP reverse proxy in front of Identity, Catalog and Ordering. Combined Swagger in Development | 7080 |
 
 Every API also exposes `GET /health`. The full endpoint list is in the [API reference](docs/api.md).
 
@@ -61,7 +62,7 @@ Every API also exposes `GET /health`. The full endpoint list is in the [API refe
    dotnet run --project src/Services/Identity/Identity.Api --launch-profile https
    ```
 
-   Run Catalog, Ordering, Payment and Notification the same way. Ports and Swagger URLs are in [configuration](docs/configuration.md#ports).
+   Run Catalog, Ordering, Payment and Notification the same way. Then run `src/Gateway/Gateway.Api` and open https://localhost:7080/swagger for one Swagger UI across Identity, Catalog and Ordering. Ports and Swagger URLs are in [configuration](docs/configuration.md#ports).
 
 4. **Run every consumer once.** Payment, Ordering and Notification each create their own queue on first start. Until then events for them cannot be delivered and block the sender. See [messaging](docs/messaging.md#start-every-consumer-at-least-once).
 
@@ -82,6 +83,7 @@ Other test payment methods are listed in the [API reference](docs/api.md#payment
 | [API reference](docs/api.md) | Endpoints, order rules, test payment methods |
 | [Configuration](docs/configuration.md) | Docker environment, user secrets, signing key, ports |
 | [Messaging](docs/messaging.md) | Exchanges, queues and RabbitMQ gotchas |
+| [Gateway](docs/gateway.md) | YARP API gateway: routes, combined Swagger, responsibilities |
 
 ## Roadmap
 
@@ -91,7 +93,7 @@ Unchecked items are not implemented yet:
 - [x] **Ordering handles payment results**: success sets `Confirmed`, failure sets `PaymentFailed` (retryable) or `Failed`
 - [x] **Notification.Api (first iteration)**: consumes order events and logs them
 - [x] **RS256 JWT signing** with a public key published by Identity
-- [ ] **API gateway** (YARP) with a combined Swagger UI
+- [x] **API gateway** (YARP) with a combined Swagger UI, CORS, rate limiting and correlation ids
 - [ ] **Pagination** for all `POST …/search` endpoints (page number, page size, total count)
 - [ ] **Redis caching** for Catalog product and category reads (cache-aside, invalidated on admin writes)
 - [ ] Integration tests with Testcontainers (PostgreSQL, RabbitMQ)
