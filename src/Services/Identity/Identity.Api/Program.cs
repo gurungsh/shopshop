@@ -1,7 +1,7 @@
-using System.Text;
 using FluentValidation;
 using Identity.Api.Endpoints;
 using Identity.Api.Options;
+using Identity.Api.Security;
 using Identity.Api.Services;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Serilog;
@@ -35,9 +36,10 @@ try
         .Get<JwtOptions>()
         ?? throw new InvalidOperationException("JwtSettings configuration is missing.");
 
-    if (string.IsNullOrWhiteSpace(jwtSettings.Secret) || jwtSettings.Secret.Length < 32)
+    if (string.IsNullOrWhiteSpace(jwtSettings.PrivateKeyPem) ||
+        string.IsNullOrWhiteSpace(jwtSettings.KeyId))
     {
-        throw new InvalidOperationException("JWT Secret is missing or invalid.");
+        throw new InvalidOperationException("JWT PrivateKeyPem or KeyId is missing.");
     }
 
     builder.Services.Configure<JwtOptions>(
@@ -51,6 +53,8 @@ try
         options.UseNpgsql(connectionString));
 
     // Authentication and authorization
+    builder.Services.AddSingleton<IJwtKeyProvider, JwtKeyProvider>();
+
     builder.Services
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
@@ -63,15 +67,22 @@ try
                     return Task.CompletedTask;
                 }
             };
+        });
+
+    builder.Services
+        .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+        .Configure<IJwtKeyProvider, IOptions<JwtOptions>>((options, keyProvider, jwtOptions) =>
+        {
+            var jwt = jwtOptions.Value;
 
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
+                IssuerSigningKey = keyProvider.SigningKey,
                 ValidateIssuer = true,
-                ValidIssuer = jwtSettings.Issuer,
+                ValidIssuer = jwt.Issuer,
                 ValidateAudience = true,
-                ValidAudience = jwtSettings.Audience,
+                ValidAudience = jwt.Audience,
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.FromSeconds(30)
             };
@@ -113,6 +124,9 @@ try
     });
 
     var app = builder.Build();
+
+    // Fail fast: build the key provider so an invalid PEM stops startup
+    app.Services.GetRequiredService<IJwtKeyProvider>();
 
     // Request logging early in the pipeline
     app.UseSerilogRequestLogging();
@@ -158,6 +172,7 @@ try
     app.MapAdminUserEndpoints();
     app.MapAuthEndpoints();
     app.MapUserEndpoints();
+    app.MapJwksEndpoints();
 
     Log.Information("Application pipeline configured. Running application.");
 

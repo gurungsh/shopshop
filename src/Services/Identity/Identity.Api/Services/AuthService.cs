@@ -1,9 +1,9 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using BuildingBlocks.Core;
 using Identity.Api.DTOs;
 using Identity.Api.Options;
+using Identity.Api.Security;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
@@ -18,17 +18,20 @@ namespace Identity.Api.Services
         private readonly IdentityDbContext _dbContext;
         private readonly IPasswordHasher<User> _hasher;
         private readonly JwtOptions _jwtSettings;
+        private readonly IJwtKeyProvider _jwtKeyProvider;
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
             IdentityDbContext dbcontext,
             IPasswordHasher<User> hasher,
             IOptions<JwtOptions> jwtOptions,
+            IJwtKeyProvider jwtKeyProvider,
             ILogger<AuthService> logger)
         {
             _dbContext = dbcontext;
             _hasher = hasher;
             _jwtSettings = jwtOptions.Value;
+            _jwtKeyProvider = jwtKeyProvider;
             _logger = logger;
         }
 
@@ -302,8 +305,6 @@ namespace Identity.Api.Services
         {
             _logger.LogDebug("Generating JWT token for user: {Email}", user.Email);
 
-            var key = Encoding.UTF8.GetBytes(_jwtSettings.Secret);
-
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
@@ -319,8 +320,8 @@ namespace Identity.Api.Services
                 Issuer = _jwtSettings.Issuer,
                 Audience = _jwtSettings.Audience,
                 SigningCredentials = new SigningCredentials(
-                    new SymmetricSecurityKey(key),
-                    SecurityAlgorithms.HmacSha256Signature)
+                    _jwtKeyProvider.SigningKey,
+                    SecurityAlgorithms.RsaSha256)
             };
 
             var tokenHandler = new JwtSecurityTokenHandler();
