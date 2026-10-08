@@ -180,7 +180,7 @@ namespace Identity.Api.Services
             }
         }
 
-        public async Task<Result<List<UserResponse>>> GetUsersAsync(UserQuery query)
+        public async Task<Result<PagedResponse<UserResponse>>> GetUsersAsync(UserQuery query)
         {
             var users = _dbContext.Users.AsNoTracking();
 
@@ -196,9 +196,18 @@ namespace Identity.Api.Services
                 users = users.Where(u => string.Equals(u.Role, query.Role));
             }
 
-            var result = await users.Select(u => new UserResponse(u.Id, u.Email, u.Role)).ToListAsync();
+            var totalCount = await users.CountAsync();
 
-            return Result<List<UserResponse>>.Success(result);
+            var items = await users
+                .OrderBy(u => u.CreatedAtUtc)
+                .ThenBy(u => u.Id)
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
+                .Select(u => new UserResponse(u.Id, u.Email, u.Role))
+                .ToListAsync();
+
+            return Result<PagedResponse<UserResponse>>.Success(
+                new PagedResponse<UserResponse>(items, query.Page, query.PageSize, totalCount));
         }
 
         public async Task<Result<UserResponse>> GetUserAsync(Guid id)

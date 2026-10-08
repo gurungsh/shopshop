@@ -66,7 +66,7 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
+            Assert.Equal(2, result.Value.Items.Count);
         }
 
         [Fact]
@@ -88,9 +88,9 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
-            Assert.Contains(result.Value, p => p.Id == product1.Id);
-            Assert.Contains(result.Value, p => p.Id == product3.Id);
+            Assert.Equal(2, result.Value.Items.Count);
+            Assert.Contains(result.Value.Items, p => p.Id == product1.Id);
+            Assert.Contains(result.Value.Items, p => p.Id == product3.Id);
         }
 
         [Fact]
@@ -114,7 +114,7 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
+            Assert.Equal(2, result.Value.Items.Count);
         }
 
         [Fact]
@@ -135,8 +135,8 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
-            Assert.Equal("Running Shoe", result.Value[0].Name);
+            Assert.Single(result.Value.Items);
+            Assert.Equal("Running Shoe", result.Value.Items[0].Name);
         }
 
         [Fact]
@@ -157,7 +157,7 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
+            Assert.Single(result.Value.Items);
         }
 
         [Fact]
@@ -178,8 +178,8 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
-            Assert.Equal("SKU-001", result.Value[0].Sku);
+            Assert.Single(result.Value.Items);
+            Assert.Equal("SKU-001", result.Value.Items[0].Sku);
         }
 
         [Fact]
@@ -201,8 +201,8 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
-            Assert.All(result.Value, p => Assert.True(p.Price >= 50m));
+            Assert.Equal(2, result.Value.Items.Count);
+            Assert.All(result.Value.Items, p => Assert.True(p.Price >= 50m));
         }
 
         [Fact]
@@ -224,8 +224,8 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
-            Assert.All(result.Value, p => Assert.True(p.Price <= 50m));
+            Assert.Equal(2, result.Value.Items.Count);
+            Assert.All(result.Value.Items, p => Assert.True(p.Price <= 50m));
         }
 
         [Fact]
@@ -247,8 +247,8 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
-            Assert.Equal("SKU-002", result.Value[0].Sku);
+            Assert.Single(result.Value.Items);
+            Assert.Equal("SKU-002", result.Value.Items[0].Sku);
         }
 
         [Fact]
@@ -267,7 +267,66 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Empty(result.Value);
+            Assert.Empty(result.Value.Items);
+        }
+
+
+        [Fact]
+        public async Task GetProductsAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+        {
+            // Arrange
+            var categoryId = Guid.NewGuid();
+            _dbContext.Products.AddRange(Enumerable.Range(1, 5).Select(i =>
+                CreateTestProduct(categoryId, name: $"Product {i}", sku: $"SKU-{i:000}")));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _productService.GetProductsAsync(new ProductQuery(Page: 2, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, result.Value!.Items.Count);
+            Assert.Equal(2, result.Value.Page);
+            Assert.Equal(2, result.Value.PageSize);
+            Assert.Equal(5, result.Value.TotalCount);
+            Assert.Equal(3, result.Value.TotalPages);
+        }
+
+        [Fact]
+        public async Task GetProductsAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
+        {
+            // Arrange
+            var categoryId = Guid.NewGuid();
+            _dbContext.Products.AddRange(Enumerable.Range(1, 5).Select(i =>
+                CreateTestProduct(categoryId, name: $"Product {i}", sku: $"SKU-{i:000}")));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _productService.GetProductsAsync(new ProductQuery(Page: 10, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.Value!.Items);
+            Assert.Equal(5, result.Value.TotalCount);
+        }
+
+        [Fact]
+        public async Task GetProductsAsync_WithDifferentPages_ShouldNotReturnOverlappingItems()
+        {
+            // Arrange
+            var categoryId = Guid.NewGuid();
+            _dbContext.Products.AddRange(Enumerable.Range(1, 5).Select(i =>
+                CreateTestProduct(categoryId, name: $"Product {i}", sku: $"SKU-{i:000}")));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var first = await _productService.GetProductsAsync(new ProductQuery(Page: 1, PageSize: 3));
+            var second = await _productService.GetProductsAsync(new ProductQuery(Page: 2, PageSize: 3));
+
+            // Assert
+            var ids = first.Value!.Items.Select(i => i.Id).Concat(second.Value!.Items.Select(i => i.Id)).ToList();
+            Assert.Equal(5, ids.Count);
+            Assert.Equal(5, ids.Distinct().Count());
         }
 
         #endregion

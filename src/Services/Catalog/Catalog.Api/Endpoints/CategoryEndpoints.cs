@@ -1,5 +1,6 @@
 ﻿using BuildingBlocks.Web;
 using Catalog.Api.DTOs;
+using Catalog.Api.Filters;
 using Catalog.Api.Services;
 
 namespace Catalog.Api.Endpoints
@@ -23,7 +24,8 @@ namespace Catalog.Api.Endpoints
                     ? Results.Ok(result.Value)
                     : EndpointResults.ToHttpResult(result);
             })
-            .WithName("GetCategories");
+            .WithName("GetCategories")
+            .AddEndpointFilter<ValidationFilter<CategoryQuery>>();
 
             // GET /api/categories/{id}
             group.MapGet("/{id:guid}", async (

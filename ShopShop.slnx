@@ -7,7 +7,7 @@
     <File Path="docs/configuration.md" />
     <File Path="docs/gateway.md" />
     <File Path="docs/messaging.md" />
-    <File Path="readme.md" />
+    <File Path="README.md" />
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/Gateway/">

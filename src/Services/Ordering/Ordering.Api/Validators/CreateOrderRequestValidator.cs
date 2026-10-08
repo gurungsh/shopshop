@@ -1,3 +1,4 @@
+using BuildingBlocks.Core;
 using FluentValidation;
 using Ordering.Api.DTOs;
 
@@ -16,7 +17,9 @@ namespace Ordering.Api.Validators
                 .Matches(PaymentMethodIdRules.Pattern).WithMessage(PaymentMethodIdRules.Message);
 
             RuleFor(x => x.Items)
-                .NotEmpty().WithMessage("At least one item is required.");
+                .NotEmpty().WithMessage("At least one item is required.")
+                .Must(items => items is null || items.Length <= PagingDefaults.MaxPageSize)
+                .WithMessage($"An order can contain at most {PagingDefaults.MaxPageSize} items.");
 
             RuleForEach(x => x.Items).ChildRules(item =>
             {

@@ -24,7 +24,7 @@ namespace Ordering.Api.Services
             try
             {
                 // POST /api/products/search is Catalog's product search endpoint
-                using var response = await _httpClient.PostAsJsonAsync("api/products/search", new { Ids = ids }, cancellationToken);
+                using var response = await _httpClient.PostAsJsonAsync("api/products/search", new { Ids = ids, Page = 1, PageSize = Math.Max(ids.Length, 1) }, cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -32,10 +32,10 @@ namespace Ordering.Api.Services
                     return Unavailable();
                 }
 
-                var products = await response.Content.ReadFromJsonAsync<List<ProductDetails>>(cancellationToken) ?? [];
+                var page = await response.Content.ReadFromJsonAsync<PagedResponse<ProductDetails>>(cancellationToken);
 
                 return Result<IReadOnlyDictionary<Guid, ProductDetails>>.Success(
-                    products.ToDictionary(p => p.Id));
+                    (page?.Items ?? []).ToDictionary(p => p.Id));
             }
             catch (Exception ex) when (
                 ex is HttpRequestException or TimeoutRejectedException or BrokenCircuitException or TaskCanceledException

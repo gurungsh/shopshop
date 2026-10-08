@@ -1,6 +1,6 @@
 # ShopShop Architecture
 
-How ShopShop is put together and where to find things in the code. For setup see the [readme](../readme.md), and for details see the [API reference](api.md), [configuration](configuration.md) and [messaging](messaging.md).
+How ShopShop is put together and where to find things in the code. For setup see the [readme](../README.md), and for details see the [API reference](api.md), [configuration](configuration.md) and [messaging](messaging.md).
 
 ## Contents
 
@@ -379,7 +379,7 @@ Where each idea lives in the code.
 | Concept | How it's done here | Where to look |
 |---|---|---|
 | Minimal APIs | Endpoints are grouped with `MapGroup` and named with `.WithName`. Admin routes live in separate `Admin*Endpoints` classes. | `*.Api/Endpoints/` |
-| Search as `POST` | List endpoints are `POST …/search` with a `<Entity>Query` body. A bare `POST` is always a create. | `ProductEndpoints`, `OrderEndpoints` |
+| Search as `POST` | List endpoints are `POST …/search` with a `<Entity>Query` body. A bare `POST` is always a create. Every query takes `Page` (default 1) and `PageSize` (default 20, max 100) and returns `PagedResponse<T>` (`items`, `page`, `pageSize`, `totalCount`, `totalPages`). | `ProductEndpoints`, `OrderEndpoints` |
 | Result pattern | Business failures return `Result<T>` with a `ResultErrorType`. `EndpointResults.ToHttpResult` maps them to status codes. | `BuildingBlocks.Core`, `BuildingBlocks.Web` |
 | Validation | FluentValidation validators run through a generic `ValidationFilter<T>`. | `*.Api/Validators/`, `*.Api/Filters/` |
 | Error handling | `UseExceptionHandler` logs unexpected exceptions and returns a generic 500. | each `Program.cs` |

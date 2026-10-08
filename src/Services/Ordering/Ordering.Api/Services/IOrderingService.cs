@@ -5,8 +5,8 @@ namespace Ordering.Api.Services
 {
     public interface IOrderingService
     {
-        Task<Result<List<OrderResponse>>> GetOrdersForCustomerAsync(Guid customerId, OrderQuery query);
-        Task<Result<List<OrderResponse>>> GetOrdersForAdminAsync(OrderQuery query);
+        Task<Result<PagedResponse<OrderResponse>>> GetOrdersForCustomerAsync(Guid customerId, OrderQuery query);
+        Task<Result<PagedResponse<OrderResponse>>> GetOrdersForAdminAsync(OrderQuery query);
         Task<Result<OrderDetailResponse>> GetOrderForCustomerAsync(Guid customerId, Guid id);
         Task<Result<OrderDetailResponse>> GetOrderForAdminAsync(Guid id);
         Task<Result<CreateOrderResponse>> CreateOrderAsync(Guid customerId, CreateOrderRequest request);

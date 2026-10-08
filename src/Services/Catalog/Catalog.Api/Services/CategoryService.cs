@@ -19,7 +19,7 @@ namespace Catalog.Api.Services
             _logger = logger;
         }
 
-        public async Task<Result<List<CategoryResponse>>> GetCategoriesAsync(CategoryQuery query)
+        public async Task<Result<PagedResponse<CategoryResponse>>> GetCategoriesAsync(CategoryQuery query)
         {
             var categories = _dbContext.Categories.AsNoTracking();
 
@@ -38,7 +38,13 @@ namespace Catalog.Api.Services
                 categories = categories.Where(c => c.Description.Contains(query.Description));
             }
 
-            var result = await categories
+            var totalCount = await categories.CountAsync();
+
+            var items = await categories
+                .OrderBy(c => c.Name)
+                .ThenBy(c => c.Id)
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
                 .Select(c => new CategoryResponse(
                     c.Id,
                     c.Name,
@@ -48,7 +54,8 @@ namespace Catalog.Api.Services
                     c.UpdatedAtUtc))
                 .ToListAsync();
 
-            return Result<List<CategoryResponse>>.Success(result);
+            return Result<PagedResponse<CategoryResponse>>.Success(
+                new PagedResponse<CategoryResponse>(items, query.Page, query.PageSize, totalCount));
         }
 
         public async Task<Result<CategoryResponse>> GetCategoryAsync(Guid id)

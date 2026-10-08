@@ -1,9 +1,13 @@
-﻿namespace Catalog.Api.DTOs
+﻿using BuildingBlocks.Core;
+
+namespace Catalog.Api.DTOs
 {
     public sealed record CategoryQuery(
         Guid[]? Ids = null,
         string? Name = null,
-        string? Description = null);
+        string? Description = null,
+        int Page = PagingDefaults.DefaultPage,
+        int PageSize = PagingDefaults.DefaultPageSize);
     public sealed record CategoryResponse(
         Guid Id,
         string Name,

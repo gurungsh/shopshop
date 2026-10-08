@@ -26,7 +26,8 @@ public static class AdminUserEndpoints
                 ? Results.Ok(result.Value)
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("GetUsers");
+        .WithName("GetUsers")
+        .AddEndpointFilter<ValidationFilter<UserQuery>>();
 
         // GET /api/admin/users/{id}
         group.MapGet("/{id}", async (

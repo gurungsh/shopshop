@@ -1,3 +1,4 @@
+using BuildingBlocks.Core;
 using Ordering.Infrastructure.Constants;
 
 namespace Ordering.Api.DTOs
@@ -14,8 +15,9 @@ namespace Ordering.Api.DTOs
         DateTime? UpdatedAfterUtc = null,
         Guid[]? ProductIds = null,
         int? MinItemCount = null,
-        int? MaxItemCount = null
-        );
+        int? MaxItemCount = null,
+        int Page = PagingDefaults.DefaultPage,
+        int PageSize = PagingDefaults.DefaultPageSize);
     public sealed record OrderResponse(
         Guid Id,
         Guid UserId,
