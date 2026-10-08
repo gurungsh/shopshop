@@ -46,7 +46,7 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
+            Assert.Equal(2, result.Value.Items.Count);
         }
 
         [Fact]
@@ -66,8 +66,8 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
-            Assert.Equal("Electronics", result.Value[0].Name);
+            Assert.Single(result.Value.Items);
+            Assert.Equal("Electronics", result.Value.Items[0].Name);
         }
 
         [Fact]
@@ -85,7 +85,7 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Empty(result.Value);
+            Assert.Empty(result.Value.Items);
         }
 
         [Fact]
@@ -105,8 +105,8 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
-            Assert.Equal("Electronics", result.Value[0].Name);
+            Assert.Single(result.Value.Items);
+            Assert.Equal("Electronics", result.Value.Items[0].Name);
         }
 
         [Fact]
@@ -127,7 +127,7 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
+            Assert.Single(result.Value.Items);
         }
 
         [Fact]
@@ -148,9 +148,9 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
-            Assert.Contains(result.Value, c => c.Id == category1.Id);
-            Assert.Contains(result.Value, c => c.Id == category3.Id);
+            Assert.Equal(2, result.Value.Items.Count);
+            Assert.Contains(result.Value.Items, c => c.Id == category1.Id);
+            Assert.Contains(result.Value.Items, c => c.Id == category3.Id);
         }
 
         [Fact]
@@ -171,8 +171,64 @@ namespace Catalog.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
-            Assert.Equal(category1.Id, result.Value[0].Id);
+            Assert.Single(result.Value.Items);
+            Assert.Equal(category1.Id, result.Value.Items[0].Id);
+        }
+
+
+        [Fact]
+        public async Task GetCategoriesAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+        {
+            // Arrange
+            _dbContext.Categories.AddRange(Enumerable.Range(1, 5).Select(i =>
+                new Category { Name = $"Category {i}", Description = "Description" }));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _categoryService.GetCategoriesAsync(new CategoryQuery(Page: 2, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, result.Value!.Items.Count);
+            Assert.Equal(2, result.Value.Page);
+            Assert.Equal(2, result.Value.PageSize);
+            Assert.Equal(5, result.Value.TotalCount);
+            Assert.Equal(3, result.Value.TotalPages);
+        }
+
+        [Fact]
+        public async Task GetCategoriesAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
+        {
+            // Arrange
+            _dbContext.Categories.AddRange(Enumerable.Range(1, 5).Select(i =>
+                new Category { Name = $"Category {i}", Description = "Description" }));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _categoryService.GetCategoriesAsync(new CategoryQuery(Page: 10, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.Value!.Items);
+            Assert.Equal(5, result.Value.TotalCount);
+        }
+
+        [Fact]
+        public async Task GetCategoriesAsync_WithDifferentPages_ShouldNotReturnOverlappingItems()
+        {
+            // Arrange
+            _dbContext.Categories.AddRange(Enumerable.Range(1, 5).Select(i =>
+                new Category { Name = $"Category {i}", Description = "Description" }));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var first = await _categoryService.GetCategoriesAsync(new CategoryQuery(Page: 1, PageSize: 3));
+            var second = await _categoryService.GetCategoriesAsync(new CategoryQuery(Page: 2, PageSize: 3));
+
+            // Assert
+            var ids = first.Value!.Items.Select(i => i.Id).Concat(second.Value!.Items.Select(i => i.Id)).ToList();
+            Assert.Equal(5, ids.Count);
+            Assert.Equal(5, ids.Distinct().Count());
         }
 
         #endregion

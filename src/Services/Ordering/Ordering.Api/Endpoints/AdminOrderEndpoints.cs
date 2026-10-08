@@ -26,7 +26,8 @@ namespace Ordering.Api.Endpoints
                     ? Results.Ok(result.Value)
                     : EndpointResults.ToHttpResult(result);
             })
-            .WithName("AdminSearchOrders");
+            .WithName("AdminSearchOrders")
+            .AddEndpointFilter<ValidationFilter<OrderQuery>>();
 
             // GET /api/admin/orders/{id}
             group.MapGet("/{id:guid}", async (

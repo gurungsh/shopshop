@@ -94,7 +94,7 @@ Unchecked items are not implemented yet:
 - [x] **Notification.Api (first iteration)**: consumes order events and logs them
 - [x] **RS256 JWT signing** with a public key published by Identity
 - [x] **API gateway** (YARP) with a combined Swagger UI, CORS, rate limiting and correlation ids
-- [ ] **Pagination** for all `POST …/search` endpoints (page number, page size, total count)
+- [x] **Pagination** for all `POST …/search` endpoints (page number, page size, total count)
 - [ ] **Redis caching** for Catalog product and category reads (cache-aside, invalidated on admin writes)
 - [ ] Integration tests with Testcontainers (PostgreSQL, RabbitMQ)
 - [ ] Identity refresh tokens and logout

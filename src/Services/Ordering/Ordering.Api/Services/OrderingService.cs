@@ -38,11 +38,16 @@ namespace Ordering.Api.Services
             _logger = logger;
         }
 
-        public async Task<Result<List<OrderResponse>>> GetOrdersForCustomerAsync(Guid customerId, OrderQuery query)
+        public async Task<Result<PagedResponse<OrderResponse>>> GetOrdersForCustomerAsync(Guid customerId, OrderQuery query)
         {
             var orders = _dbContext.Orders.AsNoTracking().Where(o => o.UserId == customerId);
 
-            var result = await ApplyGetOrdersFilters(orders, query)
+            var filtered = ApplyGetOrdersFilters(orders, query);
+            var totalCount = await filtered.CountAsync();
+
+            var items = await filtered
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
                 .Select(o => new OrderResponse(
                     o.Id,
                     o.UserId,
@@ -52,14 +57,20 @@ namespace Ordering.Api.Services
                     o.UpdatedAtUtc))
                 .ToListAsync();
 
-            return Result<List<OrderResponse>>.Success(result);
+            return Result<PagedResponse<OrderResponse>>.Success(
+                new PagedResponse<OrderResponse>(items, query.Page, query.PageSize, totalCount));
         }
 
-        public async Task<Result<List<OrderResponse>>> GetOrdersForAdminAsync(OrderQuery query)
+        public async Task<Result<PagedResponse<OrderResponse>>> GetOrdersForAdminAsync(OrderQuery query)
         {
             var orders = _dbContext.Orders.AsNoTracking();
 
-            var result = await ApplyGetOrdersFilters(orders, query)
+            var filtered = ApplyGetOrdersFilters(orders, query);
+            var totalCount = await filtered.CountAsync();
+
+            var items = await filtered
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
                 .Select(o => new OrderResponse(
                     o.Id,
                     o.UserId,
@@ -69,7 +80,8 @@ namespace Ordering.Api.Services
                     o.UpdatedAtUtc))
                 .ToListAsync();
 
-            return Result<List<OrderResponse>>.Success(result);
+            return Result<PagedResponse<OrderResponse>>.Success(
+                new PagedResponse<OrderResponse>(items, query.Page, query.PageSize, totalCount));
         }
 
         public async Task<Result<OrderDetailResponse>> GetOrderForCustomerAsync(Guid customerId, Guid id)
@@ -519,7 +531,7 @@ namespace Ordering.Api.Services
                 orders = orders.Where(o => o.Items.Count <= query.MaxItemCount.Value);
             }
 
-            return orders.OrderByDescending(o => o.CreatedAtUtc);
+            return orders.OrderByDescending(o => o.CreatedAtUtc).ThenBy(o => o.Id);
         }
     }
 

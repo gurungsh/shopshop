@@ -47,7 +47,8 @@ namespace Ordering.Api.Endpoints
                     ? Results.Ok(result.Value)
                     : EndpointResults.ToHttpResult(result);
             })
-            .WithName("GetOrders");
+            .WithName("GetOrders")
+            .AddEndpointFilter<ValidationFilter<OrderQuery>>();
 
             // GET /api/orders/{id}
             group.MapGet("/{id:guid}", async (

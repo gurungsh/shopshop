@@ -1,4 +1,6 @@
-﻿namespace Catalog.Api.DTOs
+﻿using BuildingBlocks.Core;
+
+namespace Catalog.Api.DTOs
 {
     public sealed record ProductQuery(
         Guid[]? Ids = null,
@@ -7,7 +9,9 @@
         string? Description = null,
         string? Sku = null,
         decimal? MinPrice = null,
-        decimal? MaxPrice = null);
+        decimal? MaxPrice = null,
+        int Page = PagingDefaults.DefaultPage,
+        int PageSize = PagingDefaults.DefaultPageSize);
     public sealed record ProductResponse(
         Guid Id,
         Guid CategoryId,

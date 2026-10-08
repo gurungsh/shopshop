@@ -558,10 +558,10 @@ namespace Identity.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(3, result.Value.Count);
-            Assert.Contains(result.Value, u => u.Email == "user1@example.com");
-            Assert.Contains(result.Value, u => u.Email == "user2@example.com");
-            Assert.Contains(result.Value, u => u.Email == "user3@example.com");
+            Assert.Equal(3, result.Value.Items.Count);
+            Assert.Contains(result.Value.Items, u => u.Email == "user1@example.com");
+            Assert.Contains(result.Value.Items, u => u.Email == "user2@example.com");
+            Assert.Contains(result.Value.Items, u => u.Email == "user3@example.com");
         }
 
         [Fact]
@@ -573,7 +573,63 @@ namespace Identity.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Empty(result.Value);
+            Assert.Empty(result.Value.Items);
+        }
+
+
+        [Fact]
+        public async Task GetUsersAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+        {
+            // Arrange
+            _dbContext.Users.AddRange(Enumerable.Range(1, 5).Select(i =>
+                new User { Email = $"user{i}@example.com", PasswordHash = "hash", Role = Roles.Customer }));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _authService.GetUsersAsync(new UserQuery(Page: 2, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, result.Value!.Items.Count);
+            Assert.Equal(2, result.Value.Page);
+            Assert.Equal(2, result.Value.PageSize);
+            Assert.Equal(5, result.Value.TotalCount);
+            Assert.Equal(3, result.Value.TotalPages);
+        }
+
+        [Fact]
+        public async Task GetUsersAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
+        {
+            // Arrange
+            _dbContext.Users.AddRange(Enumerable.Range(1, 5).Select(i =>
+                new User { Email = $"user{i}@example.com", PasswordHash = "hash", Role = Roles.Customer }));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _authService.GetUsersAsync(new UserQuery(Page: 10, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.Value!.Items);
+            Assert.Equal(5, result.Value.TotalCount);
+        }
+
+        [Fact]
+        public async Task GetUsersAsync_WithDifferentPages_ShouldNotReturnOverlappingItems()
+        {
+            // Arrange
+            _dbContext.Users.AddRange(Enumerable.Range(1, 5).Select(i =>
+                new User { Email = $"user{i}@example.com", PasswordHash = "hash", Role = Roles.Customer }));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var first = await _authService.GetUsersAsync(new UserQuery(Page: 1, PageSize: 3));
+            var second = await _authService.GetUsersAsync(new UserQuery(Page: 2, PageSize: 3));
+
+            // Assert
+            var ids = first.Value!.Items.Select(i => i.Id).Concat(second.Value!.Items.Select(i => i.Id)).ToList();
+            Assert.Equal(5, ids.Count);
+            Assert.Equal(5, ids.Distinct().Count());
         }
 
         #endregion
@@ -637,10 +693,10 @@ namespace Identity.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
-            Assert.Equal(user.Id, result.Value[0].Id);
-            Assert.Equal("test@example.com", result.Value[0].Email);
-            Assert.Equal(Roles.Customer, result.Value[0].Role);
+            Assert.Single(result.Value.Items);
+            Assert.Equal(user.Id, result.Value.Items[0].Id);
+            Assert.Equal("test@example.com", result.Value.Items[0].Email);
+            Assert.Equal(Roles.Customer, result.Value.Items[0].Role);
         }
 
         [Fact]
@@ -653,7 +709,7 @@ namespace Identity.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Empty(result.Value);
+            Assert.Empty(result.Value.Items);
         }
 
         [Fact]
@@ -677,8 +733,8 @@ namespace Identity.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Single(result.Value);
-            Assert.Equal(user.Id, result.Value[0].Id);
+            Assert.Single(result.Value.Items);
+            Assert.Equal(user.Id, result.Value.Items[0].Id);
         }
 
         #endregion

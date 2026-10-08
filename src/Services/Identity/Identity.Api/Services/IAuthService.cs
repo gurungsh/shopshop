@@ -12,7 +12,7 @@ namespace Identity.Api.Services
         Task<Result<bool>> LogoutAsync(ClaimsPrincipal principal);
         Task<Result<UserResponse>> GetCurrentUserAsync(ClaimsPrincipal principal);
         Task<Result<UserResponse>> UpdateCurrentUserAsync(ClaimsPrincipal principal, UpdateCurrentUserRequest request);
-        Task<Result<List<UserResponse>>> GetUsersAsync(UserQuery query);
+        Task<Result<PagedResponse<UserResponse>>> GetUsersAsync(UserQuery query);
         Task<Result<UserResponse>> GetUserAsync(Guid id);
         Task<Result<UserResponse>> CreateUserAsync(AdminCreateUserRequest request);
         Task<Result<UserResponse>> UpdateUserAsync(Guid id, AdminUpdateUserRequest request);

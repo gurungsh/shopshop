@@ -19,7 +19,7 @@ namespace Catalog.Api.Services
             _logger = logger;
         }
 
-        public async Task<Result<List<ProductResponse>>> GetProductsAsync(ProductQuery query)
+        public async Task<Result<PagedResponse<ProductResponse>>> GetProductsAsync(ProductQuery query)
         {
             var products = _dbContext.Products.AsNoTracking();
 
@@ -58,7 +58,13 @@ namespace Catalog.Api.Services
                 products = products.Where(p => p.Price <= query.MaxPrice);
             }
 
-            var result = await products
+            var totalCount = await products.CountAsync();
+
+            var items = await products
+                .OrderBy(p => p.CreatedAtUtc)
+                .ThenBy(p => p.Id)
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
                 .Select(p => new ProductResponse(
                     p.Id,
                     p.CategoryId,
@@ -71,7 +77,8 @@ namespace Catalog.Api.Services
                     p.UpdatedAtUtc))
                 .ToListAsync();
 
-            return Result<List<ProductResponse>>.Success(result);
+            return Result<PagedResponse<ProductResponse>>.Success(
+                new PagedResponse<ProductResponse>(items, query.Page, query.PageSize, totalCount));
         }
 
         public async Task<Result<ProductResponse>> GetProductAsync(Guid id)

@@ -646,8 +646,67 @@ namespace Ordering.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
-            Assert.All(result.Value, o => Assert.Equal(customerId, o.UserId));
+            Assert.Equal(2, result.Value.Items.Count);
+            Assert.All(result.Value.Items, o => Assert.Equal(customerId, o.UserId));
+        }
+
+
+        [Fact]
+        public async Task GetOrdersForCustomerAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(customerId)));
+            _dbContext.Orders.Add(CreateTestOrder(Guid.NewGuid()));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.GetOrdersForCustomerAsync(customerId, new OrderQuery(Page: 2, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, result.Value!.Items.Count);
+            Assert.Equal(2, result.Value.Page);
+            Assert.Equal(2, result.Value.PageSize);
+            Assert.Equal(5, result.Value.TotalCount);
+            Assert.Equal(3, result.Value.TotalPages);
+        }
+
+        [Fact]
+        public async Task GetOrdersForCustomerAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(customerId)));
+            _dbContext.Orders.Add(CreateTestOrder(Guid.NewGuid()));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.GetOrdersForCustomerAsync(customerId, new OrderQuery(Page: 10, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.Value!.Items);
+            Assert.Equal(5, result.Value.TotalCount);
+        }
+
+        [Fact]
+        public async Task GetOrdersForCustomerAsync_WithDifferentPages_ShouldNotReturnOverlappingItems()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(customerId)));
+            _dbContext.Orders.Add(CreateTestOrder(Guid.NewGuid()));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var first = await _orderingService.GetOrdersForCustomerAsync(customerId, new OrderQuery(Page: 1, PageSize: 3));
+            var second = await _orderingService.GetOrdersForCustomerAsync(customerId, new OrderQuery(Page: 2, PageSize: 3));
+
+            // Assert
+            var ids = first.Value!.Items.Select(i => i.Id).Concat(second.Value!.Items.Select(i => i.Id)).ToList();
+            Assert.Equal(5, ids.Count);
+            Assert.Equal(5, ids.Distinct().Count());
         }
 
         #endregion
@@ -672,8 +731,61 @@ namespace Ordering.Api.UnitTests
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(result.Value);
-            Assert.Equal(2, result.Value.Count);
-            Assert.All(result.Value, o => Assert.True(o.TotalAmount <= 100m));
+            Assert.Equal(2, result.Value.Items.Count);
+            Assert.All(result.Value.Items, o => Assert.True(o.TotalAmount <= 100m));
+        }
+
+
+        [Fact]
+        public async Task GetOrdersForAdminAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+        {
+            // Arrange
+            _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(Guid.NewGuid())));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.GetOrdersForAdminAsync(new OrderQuery(Page: 2, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, result.Value!.Items.Count);
+            Assert.Equal(2, result.Value.Page);
+            Assert.Equal(2, result.Value.PageSize);
+            Assert.Equal(5, result.Value.TotalCount);
+            Assert.Equal(3, result.Value.TotalPages);
+        }
+
+        [Fact]
+        public async Task GetOrdersForAdminAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
+        {
+            // Arrange
+            _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(Guid.NewGuid())));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _orderingService.GetOrdersForAdminAsync(new OrderQuery(Page: 10, PageSize: 2));
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.Value!.Items);
+            Assert.Equal(5, result.Value.TotalCount);
+        }
+
+        [Fact]
+        public async Task GetOrdersForAdminAsync_WithDifferentPages_ShouldNotReturnOverlappingItems()
+        {
+            // Arrange
+            _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(Guid.NewGuid())));
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var first = await _orderingService.GetOrdersForAdminAsync(new OrderQuery(Page: 1, PageSize: 3));
+            var second = await _orderingService.GetOrdersForAdminAsync(new OrderQuery(Page: 2, PageSize: 3));
+
+            // Assert
+            var ids = first.Value!.Items.Select(i => i.Id).Concat(second.Value!.Items.Select(i => i.Id)).ToList();
+            Assert.Equal(5, ids.Count);
+            Assert.Equal(5, ids.Distinct().Count());
         }
 
         #endregion
