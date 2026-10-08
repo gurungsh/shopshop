@@ -1,18 +1,18 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using BuildingBlocks.Core;
 using Identity.Api.DTOs;
 using Identity.Api.Options;
+using Identity.Api.Security;
 using Identity.Api.Services;
 using Identity.Infrastructure.Data;
 using Identity.Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using OptionsFactory = Microsoft.Extensions.Options.Options;
 using Moq;
-using System.Security.Cryptography;
-using Identity.Api.Security;
+using OptionsFactory = Microsoft.Extensions.Options.Options;
 
 namespace Identity.Api.UnitTests
 {

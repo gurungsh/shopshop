@@ -1,8 +1,8 @@
-﻿using Catalog.Api.DTOs;
+﻿using BuildingBlocks.Core;
+using BuildingBlocks.Web;
+using Catalog.Api.DTOs;
 using Catalog.Api.Filters;
 using Catalog.Api.Services;
-using BuildingBlocks.Core;
-using BuildingBlocks.Web;
 
 namespace Catalog.Api.Endpoints
 {

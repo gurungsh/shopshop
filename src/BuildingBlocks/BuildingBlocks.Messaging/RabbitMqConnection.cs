@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 
 namespace BuildingBlocks.Messaging
 {
-    public sealed class RabbitMqConnection :IAsyncDisposable
+    public sealed class RabbitMqConnection : IAsyncDisposable
     {
         private readonly RabbitMqOptions _options;
         private readonly SemaphoreSlim _lock = new(1, 1);

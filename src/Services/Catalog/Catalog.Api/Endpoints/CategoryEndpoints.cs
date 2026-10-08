@@ -1,6 +1,6 @@
-﻿using Catalog.Api.DTOs;
+﻿using BuildingBlocks.Web;
+using Catalog.Api.DTOs;
 using Catalog.Api.Services;
-using BuildingBlocks.Web;
 
 namespace Catalog.Api.Endpoints
 {

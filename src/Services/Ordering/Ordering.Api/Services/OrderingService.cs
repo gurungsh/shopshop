@@ -401,7 +401,7 @@ namespace Ordering.Api.Services
 
             return Result<bool>.Success(true);
         }
-                
+
         private bool IsCurrentPendingAttempt(Order order, int attempt)
         {
             if (attempt != order.PaymentAttempts || order.Status != OrderStatus.Pending)

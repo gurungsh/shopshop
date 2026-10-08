@@ -1,7 +1,7 @@
-﻿using Catalog.Api.DTOs;
+﻿using BuildingBlocks.Core;
+using Catalog.Api.DTOs;
 using Catalog.Infrastructure.Data;
 using Catalog.Infrastructure.Models;
-using BuildingBlocks.Core;
 using Microsoft.EntityFrameworkCore;
 
 namespace Catalog.Api.Services
