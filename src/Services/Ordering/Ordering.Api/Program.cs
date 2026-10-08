@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json.Serialization;
 using BuildingBlocks.Messaging;
 using FluentValidation;
@@ -36,9 +35,9 @@ try
         .Get<JwtOptions>()
         ?? throw new InvalidOperationException("JwtSettings configuration is missing.");
 
-    if (string.IsNullOrWhiteSpace(jwtSettings.Secret) || jwtSettings.Secret.Length < 32)
+    if (!Uri.TryCreate(jwtSettings.MetadataAddress, UriKind.Absolute, out _))
     {
-        throw new InvalidOperationException("JWT Secret is missing or invalid.");
+        throw new InvalidOperationException("JwtSettings MetadataAddress is missing or invalid.");
     }
 
     builder.Services.Configure<JwtOptions>(
@@ -79,6 +78,7 @@ try
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
         {
+            options.MetadataAddress = jwtSettings.MetadataAddress;
             options.Events = new JwtBearerEvents
             {
                 OnAuthenticationFailed = context =>
@@ -91,7 +91,6 @@ try
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
                 ValidateIssuer = true,
                 ValidIssuer = jwtSettings.Issuer,
                 ValidateAudience = true,
@@ -194,7 +193,7 @@ try
     app.UseAuthorization();
 
     // Endpoint routing
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Ordering.Api" })).WithTags("Health");
+    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Ordering.Api" })).ExcludeFromDescription();
     app.MapOrderEndpoints();
     app.MapAdminOrderEndpoints();
 

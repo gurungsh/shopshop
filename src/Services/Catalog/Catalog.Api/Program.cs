@@ -1,13 +1,11 @@
 using System.Text;
-using FluentValidation;
-using Catalog.Api.Options;
 using Catalog.Api.Endpoints;
+using Catalog.Api.Options;
 using Catalog.Api.Services;
 using Catalog.Infrastructure.Data;
-using Catalog.Infrastructure.Models;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -35,9 +33,9 @@ try
         .Get<JwtOptions>()
         ?? throw new InvalidOperationException("JwtSettings configuration is missing.");
 
-    if (string.IsNullOrEmpty(jwtSettings.Secret) || jwtSettings.Secret.Length < 32)
+    if (!Uri.TryCreate(jwtSettings.MetadataAddress, UriKind.Absolute, out _))
     {
-        throw new InvalidOperationException("JWT Secret is missing or invalid.");
+        throw new InvalidOperationException("JwtSettings MetadataAddress is missing or invalid.");
     }
 
     builder.Services.Configure<JwtOptions>(
@@ -55,6 +53,7 @@ try
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
         {
+            options.MetadataAddress = jwtSettings.MetadataAddress;
             options.Events = new JwtBearerEvents
             {
                 OnAuthenticationFailed = context =>
@@ -67,7 +66,6 @@ try
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
                 ValidateIssuer = true,
                 ValidIssuer = jwtSettings.Issuer,
                 ValidateAudience = true,
@@ -132,7 +130,7 @@ try
     });
 
     // Development tooling
-    if(app.Environment.IsDevelopment())
+    if (app.Environment.IsDevelopment())
     {
         Log.Information("Running in Development environment.");
         app.UseSwagger();
@@ -154,12 +152,12 @@ try
     app.UseAuthorization();
 
     // Endpoint routing 
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Catalog.Api" })).WithTags("Health");
+    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Catalog.Api" })).ExcludeFromDescription();
     app.MapCategoryEndpoints();
     app.MapAdminCategoryEndpoints();
     app.MapProductEndpoints();
     app.MapAdminProductEndpoints();
-    
+
     Log.Information("Application pipeline configured. Running application.");
 
     app.Run();

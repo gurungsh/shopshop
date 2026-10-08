@@ -11,6 +11,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OptionsFactory = Microsoft.Extensions.Options.Options;
 using Moq;
+using System.Security.Cryptography;
+using Identity.Api.Security;
 
 namespace Identity.Api.UnitTests
 {
@@ -32,16 +34,20 @@ namespace Identity.Api.UnitTests
             _mockHasher = new Mock<IPasswordHasher<User>>();
             _mockLogger = new Mock<ILogger<AuthService>>();
 
+            using var rsa = RSA.Create(2048);
+
             _jwtSettings = new JwtOptions
             {
-                Secret = "ThisIsAVeryLongSecretKeyForJwtTokenSigningPurposesOnly1234567890",
+                PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem(),
+                KeyId = "test-key",
                 ExpirationInMinutes = 60,
                 Issuer = "ShopShop",
                 Audience = "ShopShopClient"
             };
 
             var jwtOptionsWrapper = OptionsFactory.Create(_jwtSettings);
-            _authService = new AuthService(_dbContext, _mockHasher.Object, jwtOptionsWrapper, _mockLogger.Object);
+            var jwtKeyProvider = new JwtKeyProvider(jwtOptionsWrapper);
+            _authService = new AuthService(_dbContext, _mockHasher.Object, jwtOptionsWrapper, jwtKeyProvider, _mockLogger.Object);
         }
 
         #region RegisterAsync Tests
@@ -77,6 +83,8 @@ namespace Identity.Api.UnitTests
             Assert.NotNull(token);
             Assert.Equal("ShopShop", token.Issuer);
             Assert.Equal("ShopShopClient", token.Audiences.First());
+            Assert.Equal("RS256", token.Header.Alg);
+            Assert.Equal("test-key", token.Header.Kid);
             Assert.Contains(token.Claims, c => c.Type == JwtRegisteredClaimNames.Email || c.Type == ClaimTypes.Email);
             Assert.Contains(token.Claims, c => c.Type == "role" || c.Type == ClaimTypes.Role);
         }
@@ -126,6 +134,7 @@ namespace Identity.Api.UnitTests
             Assert.Equal("User with this email already exists.", result.Error);
             Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
         }
+
         #endregion
 
         #region LoginAsync Tests

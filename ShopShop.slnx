@@ -2,10 +2,17 @@
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />
     <File Path="docker-compose.yml" />
+    <File Path="docs/api.md" />
     <File Path="docs/architecture.md" />
+    <File Path="docs/configuration.md" />
+    <File Path="docs/gateway.md" />
+    <File Path="docs/messaging.md" />
     <File Path="readme.md" />
   </Folder>
   <Folder Name="/src/" />
+  <Folder Name="/src/Gateway/">
+    <Project Path="src/Gateway/Gateway.Api/Gateway.Api.csproj" Id="9ae8c521-da16-47ee-92ef-faa681dd1741" />
+  </Folder>
   <Folder Name="/src/Services/" />
   <Folder Name="/src/Services/Catalog/">
     <Project Path="src/Services/Catalog/Catalog.Api/Catalog.Api.csproj" Id="d7599715-e4b0-4ea6-b31b-be7e5db01457" />
@@ -33,6 +40,9 @@
     <Project Path="src/Services/Payment/Payment.Infrastructure/Payment.Infrastructure.csproj" Id="f257db17-25d5-4b4b-b3cf-138f5eb3f412" />
   </Folder>
   <Folder Name="/tests/" />
+  <Folder Name="/tests/Gateway/">
+    <Project Path="tests/Gateway/Gateway.Api.UnitTests/Gateway.Api.UnitTests.csproj" Id="c804aef5-6f5f-468a-816e-06e08695cb5d" />
+  </Folder>
   <Folder Name="/tests/Services/" />
   <Folder Name="/tests/Services/Catalog/">
     <Project Path="tests/Services/Catalog/Catalog.Api.UnitTests/Catalog.Api.UnitTests.csproj" Id="a5d30c12-3643-497a-83f8-4e50dae70833" />
