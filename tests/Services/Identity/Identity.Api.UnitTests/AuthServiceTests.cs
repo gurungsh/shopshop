@@ -89,8 +89,10 @@ public class AuthServiceTests
         Assert.Contains(token.Claims, c => c.Type == "role" || c.Type == ClaimTypes.Role);
     }
 
-    [Fact]
-    public async Task RegisterAsync_WithDuplicateEmail_ShouldReturnConflictError()
+    [Theory]
+    [InlineData("duplicate@example.com")]
+    [InlineData("Duplicate@Example.COM")]
+    public async Task RegisterAsync_WithDuplicateEmailInAnyCase_ShouldReturnConflictError(string email)
     {
         // Arrange
         _dbContext.Users.Add(new User
@@ -101,30 +103,7 @@ public class AuthServiceTests
         });
         await _dbContext.SaveChangesAsync();
 
-        var request = new RegisterRequest("duplicate@example.com", "Test@123");
-
-        // Act
-        var result = await _authService.RegisterAsync(request);
-
-        // Assert
-        Assert.False(result.IsSuccess);
-        Assert.Equal("User with this email already exists.", result.Error);
-        Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
-    }
-
-    [Fact]
-    public async Task RegisterAsync_WithCaseInsensitiveEmail_ShouldPreventDuplicate()
-    {
-        // Arrange
-        _dbContext.Users.Add(new User
-        {
-            Email = "test@example.com",
-            PasswordHash = "existing_hash",
-            Role = Roles.Customer
-        });
-        await _dbContext.SaveChangesAsync();
-
-        var request = new RegisterRequest("Test@Example.COM", "Test@123");
+        var request = new RegisterRequest(email, "Test@123");
 
         // Act
         var result = await _authService.RegisterAsync(request);
@@ -139,8 +118,10 @@ public class AuthServiceTests
 
     #region LoginAsync Tests
 
-    [Fact]
-    public async Task LoginAsync_WithValidCredentials_ShouldReturnAuthResponse()
+    [Theory]
+    [InlineData("test@example.com")]
+    [InlineData("Test@Example.COM")]
+    public async Task LoginAsync_WithValidCredentials_ShouldReturnAuthResponseRegardlessOfEmailCase(string email)
     {
         // Arrange
         var password = "Test@123";
@@ -153,7 +134,7 @@ public class AuthServiceTests
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
 
-        var request = new LoginRequest("test@example.com", password);
+        var request = new LoginRequest(email, password);
 
         _mockHasher
             .Setup(h => h.VerifyHashedPassword(It.IsAny<User>(), user.PasswordHash, password))
@@ -249,39 +230,14 @@ public class AuthServiceTests
         Assert.Equal(newHashedPassword, updatedUser.PasswordHash);
     }
 
-    [Fact]
-    public async Task LoginAsync_WithCaseInsensitiveEmail_ShouldWork()
-    {
-        // Arrange
-        var password = "Test@123";
-        var user = new User
-        {
-            Email = "test@example.com",
-            PasswordHash = "hashed_password",
-            Role = Roles.Customer
-        };
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new LoginRequest("Test@Example.COM", password);
-
-        _mockHasher
-            .Setup(h => h.VerifyHashedPassword(It.IsAny<User>(), user.PasswordHash, password))
-            .Returns(PasswordVerificationResult.Success);
-
-        // Act
-        var result = await _authService.LoginAsync(request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-    }
-
     #endregion
 
     #region GetCurrentUserAsync Tests
 
-    [Fact]
-    public async Task GetCurrentUserAsync_WithValidPrincipal_ShouldReturnUser()
+    [Theory]
+    [InlineData(JwtRegisteredClaimNames.Sub)]
+    [InlineData(ClaimTypes.NameIdentifier)]
+    public async Task GetCurrentUserAsync_WithSubOrNameIdentifierClaim_ShouldReturnUser(string userIdClaimType)
     {
         // Arrange
         var user = new User
@@ -296,7 +252,7 @@ public class AuthServiceTests
 
         var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString())
+            new Claim(userIdClaimType, user.Id.ToString())
         };
         var identity = new ClaimsIdentity(claims);
         var principal = new ClaimsPrincipal(identity);
@@ -348,41 +304,15 @@ public class AuthServiceTests
         Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
     }
 
-    [Fact]
-    public async Task GetCurrentUserAsync_WithNameIdentifierClaim_ShouldWork()
-    {
-        // Arrange
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = "test@example.com",
-            PasswordHash = "hashed_password",
-            Role = Roles.Customer
-        };
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
-
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
-        };
-        var identity = new ClaimsIdentity(claims);
-        var principal = new ClaimsPrincipal(identity);
-
-        // Act
-        var result = await _authService.GetCurrentUserAsync(principal);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-    }
-
     #endregion
 
     #region UpdateCurrentUserAsync Tests
 
-    [Fact]
-    public async Task UpdateCurrentUserAsync_WithValidData_ShouldUpdateUser()
+    [Theory]
+    [InlineData("", "hashed_password")]
+    [InlineData("NewPassword@123", "new_hashed_password")]
+    public async Task UpdateCurrentUserAsync_WithValidData_ShouldUpdateEmailAndPasswordOnlyWhenProvided(
+        string newPassword, string expectedPasswordHash)
     {
         // Arrange
         var user = new User
@@ -395,7 +325,11 @@ public class AuthServiceTests
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
 
-        var request = new UpdateCurrentUserRequest("newemail@example.com", null);
+        _mockHasher
+            .Setup(h => h.HashPassword(It.IsAny<User>(), It.IsAny<string>()))
+            .Returns("new_hashed_password");
+
+        var request = new UpdateCurrentUserRequest("newemail@example.com", newPassword);
 
         var claims = new List<Claim>
         {
@@ -415,46 +349,7 @@ public class AuthServiceTests
         var updatedUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
         Assert.NotNull(updatedUser);
         Assert.Equal("newemail@example.com", updatedUser.Email);
-    }
-
-    [Fact]
-    public async Task UpdateCurrentUserAsync_WithPassword_ShouldUpdatePassword()
-    {
-        // Arrange
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = "test@example.com",
-            PasswordHash = "old_hashed_password",
-            Role = Roles.Customer
-        };
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
-
-        var newPassword = "NewPassword@123";
-        var newHashedPassword = "new_hashed_password";
-        var request = new UpdateCurrentUserRequest("test@example.com", newPassword);
-
-        _mockHasher
-            .Setup(h => h.HashPassword(It.IsAny<User>(), newPassword))
-            .Returns(newHashedPassword);
-
-        var claims = new List<Claim>
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString())
-        };
-        var identity = new ClaimsIdentity(claims);
-        var principal = new ClaimsPrincipal(identity);
-
-        // Act
-        var result = await _authService.UpdateCurrentUserAsync(principal, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-
-        var updatedUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
-        Assert.NotNull(updatedUser);
-        Assert.Equal(newHashedPassword, updatedUser.PasswordHash);
+        Assert.Equal(expectedPasswordHash, updatedUser.PasswordHash);
     }
 
     [Fact]
@@ -478,7 +373,7 @@ public class AuthServiceTests
         _dbContext.Users.AddRange(user1, user2);
         await _dbContext.SaveChangesAsync();
 
-        var request = new UpdateCurrentUserRequest("user2@example.com", null);
+        var request = new UpdateCurrentUserRequest("user2@example.com", string.Empty);
 
         var claims = new List<Claim>
         {
@@ -500,7 +395,7 @@ public class AuthServiceTests
     public async Task UpdateCurrentUserAsync_WithInvalidPrincipal_ShouldReturnUnauthorizedError()
     {
         // Arrange
-        var request = new UpdateCurrentUserRequest("newemail@example.com", null);
+        var request = new UpdateCurrentUserRequest("newemail@example.com", string.Empty);
         var principal = new ClaimsPrincipal(new ClaimsIdentity());
 
         // Act
@@ -517,7 +412,7 @@ public class AuthServiceTests
     {
         // Arrange
         var nonexistentUserId = Guid.NewGuid();
-        var request = new UpdateCurrentUserRequest("newemail@example.com", null);
+        var request = new UpdateCurrentUserRequest("newemail@example.com", string.Empty);
 
         var claims = new List<Claim>
         {
@@ -577,8 +472,10 @@ public class AuthServiceTests
     }
 
 
-    [Fact]
-    public async Task GetUsersAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+    [Theory]
+    [InlineData(2, 2)]
+    [InlineData(10, 0)]
+    public async Task GetUsersAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals(int page, int expectedItemCount)
     {
         // Arrange
         _dbContext.Users.AddRange(Enumerable.Range(1, 5).Select(i =>
@@ -586,32 +483,15 @@ public class AuthServiceTests
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _authService.GetUsersAsync(new UserQuery(Page: 2, PageSize: 2));
+        var result = await _authService.GetUsersAsync(new UserQuery(Page: page, PageSize: 2));
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Value!.Items.Count);
-        Assert.Equal(2, result.Value.Page);
+        Assert.Equal(expectedItemCount, result.Value!.Items.Count);
+        Assert.Equal(page, result.Value.Page);
         Assert.Equal(2, result.Value.PageSize);
         Assert.Equal(5, result.Value.TotalCount);
         Assert.Equal(3, result.Value.TotalPages);
-    }
-
-    [Fact]
-    public async Task GetUsersAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
-    {
-        // Arrange
-        _dbContext.Users.AddRange(Enumerable.Range(1, 5).Select(i =>
-            new User { Email = $"user{i}@example.com", PasswordHash = "hash", Role = Roles.Customer }));
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _authService.GetUsersAsync(new UserQuery(Page: 10, PageSize: 2));
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.Empty(result.Value!.Items);
-        Assert.Equal(5, result.Value.TotalCount);
     }
 
     [Fact]
@@ -672,8 +552,11 @@ public class AuthServiceTests
         Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
     }
 
-    [Fact]
-    public async Task GetUsersAsync_WithEmail_ShouldReturnMatchingUser()
+    [Theory]
+    [InlineData("test@example.com", true)]
+    [InlineData("Test@Example.COM", true)]
+    [InlineData("nonexistent@example.com", false)]
+    public async Task GetUsersAsync_WithEmail_ShouldMatchCaseInsensitivelyOrReturnEmpty(string email, bool expectsMatch)
     {
         // Arrange
         var user = new User
@@ -687,65 +570,36 @@ public class AuthServiceTests
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _authService.GetUsersAsync(
-            new UserQuery(Email: "test@example.com"));
+        var result = await _authService.GetUsersAsync(new UserQuery(Email: email));
 
         // Assert
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
-        Assert.Single(result.Value.Items);
-        Assert.Equal(user.Id, result.Value.Items[0].Id);
-        Assert.Equal("test@example.com", result.Value.Items[0].Email);
-        Assert.Equal(Roles.Customer, result.Value.Items[0].Role);
-    }
 
-    [Fact]
-    public async Task GetUsersAsync_WithInvalidEmail_ShouldReturnEmptyList()
-    {
-        // Act
-        var result = await _authService.GetUsersAsync(
-            new UserQuery(Email: "nonexistent@example.com"));
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Empty(result.Value.Items);
-    }
-
-    [Fact]
-    public async Task GetUsersAsync_WithCaseInsensitiveEmail_ShouldFindUser()
-    {
-        // Arrange
-        var user = new User
+        if (expectsMatch)
         {
-            Email = "test@example.com",
-            PasswordHash = "hashed_password",
-            Role = Roles.Customer
-        };
-
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _authService.GetUsersAsync(
-            new UserQuery(Email: "Test@Example.COM"));
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Single(result.Value.Items);
-        Assert.Equal(user.Id, result.Value.Items[0].Id);
+            var found = Assert.Single(result.Value.Items);
+            Assert.Equal(user.Id, found.Id);
+            Assert.Equal("test@example.com", found.Email);
+            Assert.Equal(Roles.Customer, found.Role);
+        }
+        else
+        {
+            Assert.Empty(result.Value.Items);
+        }
     }
 
     #endregion
 
     #region CreateUserAsync Tests
 
-    [Fact]
-    public async Task CreateUserAsync_WithValidRequest_ShouldCreateUser()
+    [Theory]
+    [InlineData(Roles.Customer)]
+    [InlineData(Roles.Admin)]
+    public async Task CreateUserAsync_WithValidRequest_ShouldCreateUserWithRole(string role)
     {
         // Arrange
-        var request = new AdminCreateUserRequest("newuser@example.com", "Password@123", Roles.Customer);
+        var request = new AdminCreateUserRequest("newuser@example.com", "Password@123", role);
         var hashedPassword = "hashed_password";
 
         _mockHasher
@@ -759,7 +613,7 @@ public class AuthServiceTests
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
         Assert.Equal("newuser@example.com", result.Value.Email);
-        Assert.Equal(Roles.Customer, result.Value.Role);
+        Assert.Equal(role, result.Value.Role);
 
         var createdUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == "newuser@example.com");
         Assert.NotNull(createdUser);
@@ -802,24 +656,6 @@ public class AuthServiceTests
         Assert.False(result.IsSuccess);
         Assert.Equal("User with this email already exists.", result.Error);
         Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
-    }
-
-    [Fact]
-    public async Task CreateUserAsync_WithAdminRole_ShouldCreateAdminUser()
-    {
-        // Arrange
-        var request = new AdminCreateUserRequest("admin@example.com", "Password@123", Roles.Admin);
-
-        _mockHasher
-            .Setup(h => h.HashPassword(It.IsAny<User>(), It.IsAny<string>()))
-            .Returns("hashed_password");
-
-        // Act
-        var result = await _authService.CreateUserAsync(request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.Equal(Roles.Admin, result.Value!.Role);
     }
 
     #endregion

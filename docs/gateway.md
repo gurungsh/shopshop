@@ -105,7 +105,7 @@ sequenceDiagram
 | Routing | Gateway | From the `ReverseProxy` config section |
 | CORS | Gateway | Allowed frontend origins come from config. Downstream services need no CORS |
 | Rate limiting | Gateway | One global limiter to start, per-route policies later |
-| Correlation id | Gateway | Created at the edge when missing and forwarded to services (feeds the Seq / correlation id roadmap step) |
+| Correlation id | Gateway | Created at the edge when missing and forwarded to services and added to its logs. Tracing across services uses `traceparent`, not this header (see [observability](observability.md)) |
 | Request logging | Gateway | Serilog, same setup as the other services |
 | **JWT validation** | **Each service** | Unchanged. The gateway only forwards the `Authorization` header |
 | **Authorization (roles)** | **Each service** | Unchanged, `Roles.Admin` and `.RequireAuthorization()` stay where they are |

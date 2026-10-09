@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using BuildingBlocks.Messaging;
+using BuildingBlocks.Web.Observability;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
@@ -27,7 +28,11 @@ try
     // Serilog
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
-        .ReadFrom.Services(services));
+        .ReadFrom.Services(services)
+        .WriteToOtlp("Ordering.Api"));
+
+    // OpenTelemetry
+    builder.Services.AddShopShopTelemetry("Ordering.Api");
 
     // Configuration and options
     var jwtSettings = builder.Configuration

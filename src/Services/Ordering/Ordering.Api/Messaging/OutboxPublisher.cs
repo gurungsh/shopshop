@@ -64,6 +64,8 @@ public class OutboxPublisher : BackgroundService
         {
             try
             {
+                using var activity = OutboxTracing.StartPublishActivity(message.TraceParent);
+
                 await _publisher.PublishAsync(
                     MessagingTopology.OrdersExchange,
                     message.Type,

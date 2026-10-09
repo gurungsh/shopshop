@@ -25,7 +25,7 @@ RABBITMQ_DEFAULT_PASS=
 docker compose up -d
 ```
 
-These credentials are applied only the first time a container starts with an empty volume. Redis needs no `.env` values.
+These credentials are applied only the first time a container starts with an empty volume. Redis and the Grafana `lgtm` container need no `.env` values.
 
 ## User secrets
 
@@ -80,7 +80,11 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out ~/shopshop-key
 | Gateway | https://localhost:7080, http://localhost:5080 | `/swagger` (combined, Development only) |
 | RabbitMQ management | http://localhost:15672 | |
 | Redis | localhost:6379 | |
+| Grafana (`lgtm`) | http://localhost:3000 (`admin` / `admin`) | |
+| OTLP collector (`lgtm`) | localhost:4317 (gRPC), localhost:4318 (HTTP) | |
 
 The gateway calls Identity, Catalog and Ordering on their HTTPS ports, so run those with the `https` profile. Its addresses and `Cors:AllowedOrigins` are in `Gateway.Api/appsettings.json` and are not secret.
+
+Services export telemetry to `http://localhost:4317` by default. Set the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable to change it (see [observability](observability.md)).
 
 Run a service with the `https` profile, for example `dotnet run --project src/Services/Identity/Identity.Api --launch-profile https`. Migrations are applied automatically on startup in Development.

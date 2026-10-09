@@ -45,6 +45,15 @@ services:
       timeout: 5s
       retries: 5
 
+  lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: shopshop-lgtm
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+
 volumes:
   postgres_data:
   rabbitmq_data:
+  lgtm_data:

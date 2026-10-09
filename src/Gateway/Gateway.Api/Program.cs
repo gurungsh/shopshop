@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using BuildingBlocks.Web.Observability;
 using Gateway.Api.Middleware;
 using Microsoft.AspNetCore.Diagnostics;
 using Serilog;
@@ -16,8 +17,12 @@ try
 
     // Serilog
     builder.Host.UseSerilog((context, services, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration)
-    .ReadFrom.Services(services));
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .WriteToOtlp("Gateway.Api"));
+
+    // OpenTelemetry
+    builder.Services.AddShopShopTelemetry("Gateway.Api");
 
     // CORS
     var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()

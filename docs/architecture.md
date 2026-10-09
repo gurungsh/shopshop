@@ -111,6 +111,7 @@ flowchart TB
 - HTTP is used when the caller needs an answer now. Ordering asks Catalog before it creates an order.
 - Each service owns its database. No service reads another one's.
 - Catalog caches reads in Redis, and a Redis outage falls back to the database (see [caching](caching.md)).
+- Every service sends traces, metrics and logs to a Grafana stack over OTLP, and one order is one trace across all services (see [observability](observability.md)).
 
 ### Events (RabbitMQ)
 
@@ -389,7 +390,8 @@ Where each idea lives in the code.
 | Result pattern | Business failures return `Result<T>` with a `ResultErrorType`. `EndpointResults.ToHttpResult` maps them to status codes. | `BuildingBlocks.Core`, `BuildingBlocks.Web` |
 | Validation | FluentValidation validators run through a generic `ValidationFilter<T>`. | `*.Api/Validators/`, `*.Api/Filters/` |
 | Error handling | `UseExceptionHandler` logs unexpected exceptions and returns a generic 500. | each `Program.cs` |
-| Logging | Serilog message templates to the console and CLEF files, plus request logging. | each `Program.cs` |
+| Logging | Serilog message templates to the console and CLEF files, plus request logging and an OTLP sink for Grafana Loki. | each `Program.cs` |
+| Tracing | OpenTelemetry spans for HTTP, SQL and RabbitMQ. The trace context also travels through the outbox (`TraceParent`). See [observability](observability.md). | `BuildingBlocks.Web/Observability/`, `OutboxTracing` |
 | Fail-fast configuration | Options and connection strings are checked at startup. Secrets live in user secrets. | `*.Api/Options/` |
 
 ### Security

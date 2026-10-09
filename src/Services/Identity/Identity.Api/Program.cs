@@ -1,3 +1,4 @@
+using BuildingBlocks.Web.Observability;
 using FluentValidation;
 using Identity.Api.Endpoints;
 using Identity.Api.Options;
@@ -28,7 +29,11 @@ try
     // Serilog
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
-        .ReadFrom.Services(services));
+        .ReadFrom.Services(services)
+        .WriteToOtlp("Identity.Api"));
+
+    // OpenTelemetry
+    builder.Services.AddShopShopTelemetry("Identity.Api");
 
     // Configuration and options
     var jwtSettings = builder.Configuration

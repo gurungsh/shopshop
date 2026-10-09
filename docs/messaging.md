@@ -24,6 +24,7 @@ How the services talk through RabbitMQ. For the diagrams, see the [order flow](a
 - One durable queue per consumer, named `<service>.<topic>`.
 - Each queue dead-letters to `<queue>.dead` through the direct exchange `shopshop.dlx`.
 - Services never publish directly. They write an outbox row in the same transaction as the change, and a background publisher sends it.
+- Outbox rows also store the `TraceParent` of the request or message that created them, so the publish continues the same trace (see [observability](observability.md#one-trace-per-order)).
 - Delivery is at least once, so consumers must be idempotent.
 
 ## Start every consumer at least once

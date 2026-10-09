@@ -1,4 +1,5 @@
 using BuildingBlocks.Messaging;
+using BuildingBlocks.Web.Observability;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Payment.Api.Messaging;
@@ -22,7 +23,11 @@ try
     // Serilog
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
-        .ReadFrom.Services(services));
+        .ReadFrom.Services(services)
+        .WriteToOtlp("Payment.Api"));
+
+    // OpenTelemetry
+    builder.Services.AddShopShopTelemetry("Payment.Api");
 
     // Configuration and options
     var stripeSettings = builder.Configuration

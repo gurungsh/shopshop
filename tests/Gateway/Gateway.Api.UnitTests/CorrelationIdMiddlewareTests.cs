@@ -37,22 +37,7 @@ public class CorrelationIdMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_RequestHasNoCorrelationId_ShouldGenerateOne()
-    {
-        // Arrange
-        var context = new DefaultHttpContext();
-
-        // Act
-        await InvokeAsync(context);
-
-        // Assert
-        var requestId = context.Request.Headers[HeaderName].ToString();
-        Assert.True(Guid.TryParse(requestId, out _));
-        Assert.Equal(requestId, context.Response.Headers[HeaderName].ToString());
-    }
-
-    [Fact]
-    public async Task InvokeAsync_ShouldCallNextMiddleware()
+    public async Task InvokeAsync_RequestHasNoCorrelationId_ShouldGenerateOneAndCallNextMiddleware()
     {
         // Arrange
         var context = new DefaultHttpContext();
@@ -67,6 +52,9 @@ public class CorrelationIdMiddlewareTests
 
         // Assert
         Assert.True(nextCalled);
+        var requestId = context.Request.Headers[HeaderName].ToString();
+        Assert.True(Guid.TryParse(requestId, out _));
+        Assert.Equal(requestId, context.Response.Headers[HeaderName].ToString());
     }
 
     #endregion

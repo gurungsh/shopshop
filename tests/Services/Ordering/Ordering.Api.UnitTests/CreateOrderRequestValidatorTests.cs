@@ -15,25 +15,17 @@ public class CreateOrderRequestValidatorTests
 
     #region Validate Tests
 
-    [Fact]
-    public void Validate_WithMaxItems_ShouldBeValid()
+    [Theory]
+    [InlineData(100, true)]
+    [InlineData(101, false)]
+    public void Validate_WithItemCount_ShouldAllowAtMostMaxItems(int itemCount, bool expectedValid)
     {
         // Act
-        var result = _validator.Validate(CreateRequest(100));
+        var result = _validator.Validate(CreateRequest(itemCount));
 
         // Assert
-        Assert.True(result.IsValid);
-    }
-
-    [Fact]
-    public void Validate_WithTooManyItems_ShouldBeInvalid()
-    {
-        // Act
-        var result = _validator.Validate(CreateRequest(101));
-
-        // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.PropertyName == nameof(CreateOrderRequest.Items));
+        Assert.Equal(expectedValid, result.IsValid);
+        Assert.Equal(!expectedValid, result.Errors.Any(e => e.PropertyName == nameof(CreateOrderRequest.Items)));
     }
 
     #endregion
