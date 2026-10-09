@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using BuildingBlocks.Contracts.Orders;
 using BuildingBlocks.Core;
@@ -169,7 +170,7 @@ public class OrderingServiceTests
     }
 
     [Fact]
-    public async Task CreateOrderAsync_WithNoValidItems_ShouldReturnBadRequest()
+    public async Task CreateOrderAsync_WithNoValidItems_ShouldReturnBadRequestAndAddNothing()
     {
         // Arrange
         var inactive = CreateTestProduct(isActive: false);
@@ -188,6 +189,7 @@ public class OrderingServiceTests
         Assert.False(result.IsSuccess);
         Assert.Equal(ResultErrorType.BadRequest, result.ErrorType);
         Assert.Empty(_dbContext.Orders);
+        Assert.Empty(_dbContext.OutboxMessages);
     }
 
     [Fact]
@@ -234,15 +236,20 @@ public class OrderingServiceTests
         Assert.Equal(75m, result.Value.Order.TotalAmount);
     }
 
-    [Fact]
-    public async Task CreateOrderAsync_WithValidItems_ShouldAddOrderPlacedOutboxMessage()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CreateOrderAsync_WithValidItems_ShouldStartFirstPaymentAttemptAndQueueOrderPlacedWithTraceParent(bool hasActiveTrace)
     {
         // Arrange
+        Activity.Current = null;
+        using var activity = hasActiveTrace ? new Activity("test-request").Start() : null;
+
         var customerId = Guid.NewGuid();
         var shoe = CreateTestProduct(name: "Running Shoe", price: 50m);
         SetupCatalogProducts(shoe);
 
-        var request = new CreateOrderRequest("1 Test Street", [new CreateOrderItemRequest(shoe.Id, 2)]);
+        var request = new CreateOrderRequest("1 Test Street", [new CreateOrderItemRequest(shoe.Id, 2)], "pm_card_chargeDeclined");
 
         // Act
         var result = await _orderingService.CreateOrderAsync(customerId, request);
@@ -251,57 +258,24 @@ public class OrderingServiceTests
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
 
+        var order = await _dbContext.Orders.AsNoTracking().SingleAsync();
+        Assert.Equal(1, order.PaymentAttempts);
+
         var message = await _dbContext.OutboxMessages.SingleAsync();
         Assert.Equal(RoutingKeys.OrderPlaced, message.Type);
         Assert.Null(message.ProcessedAtUtc);
+        Assert.Equal(activity?.Id, message.TraceParent);
 
         var orderPlaced = ReadOutboxEvent<OrderPlacedEvent>(message);
         Assert.Equal(result.Value.Order.Id, orderPlaced.OrderId);
         Assert.Equal(customerId, orderPlaced.CustomerId);
         Assert.Equal(100m, orderPlaced.TotalAmount);
+        Assert.Equal("pm_card_chargeDeclined", orderPlaced.PaymentMethodId);
         var item = Assert.Single(orderPlaced.Items);
         Assert.Equal(shoe.Id, item.ProductId);
         Assert.Equal("Running Shoe", item.ProductName);
         Assert.Equal(2, item.Quantity);
         Assert.Equal(50m, item.UnitPrice);
-    }
-
-    [Fact]
-    public async Task CreateOrderAsync_WithPaymentMethodId_ShouldStartFirstAttemptAndIncludeItInEvent()
-    {
-        // Arrange
-        var shoe = CreateTestProduct(price: 50m);
-        SetupCatalogProducts(shoe);
-
-        var request = new CreateOrderRequest("1 Test Street", [new CreateOrderItemRequest(shoe.Id, 1)], "pm_card_chargeDeclined");
-
-        // Act
-        var result = await _orderingService.CreateOrderAsync(Guid.NewGuid(), request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-
-        var order = await _dbContext.Orders.AsNoTracking().SingleAsync();
-        Assert.Equal(1, order.PaymentAttempts);
-
-        var orderPlaced = ReadOutboxEvent<OrderPlacedEvent>(await _dbContext.OutboxMessages.SingleAsync());
-        Assert.Equal("pm_card_chargeDeclined", orderPlaced.PaymentMethodId);
-    }
-
-    [Fact]
-    public async Task CreateOrderAsync_WithNoValidItems_ShouldNotAddOutboxMessage()
-    {
-        // Arrange
-        SetupCatalogProducts();
-
-        var request = new CreateOrderRequest("1 Test Street", [new CreateOrderItemRequest(Guid.NewGuid(), 1)]);
-
-        // Act
-        var result = await _orderingService.CreateOrderAsync(Guid.NewGuid(), request);
-
-        // Assert
-        Assert.False(result.IsSuccess);
-        Assert.Empty(_dbContext.OutboxMessages);
     }
 
     #endregion
@@ -313,7 +287,7 @@ public class OrderingServiceTests
     [InlineData(OrderStatus.Confirmed)]
     [InlineData(OrderStatus.Processing)]
     [InlineData(OrderStatus.PaymentFailed)]
-    public async Task CancelOrderForCustomerAsync_WithCancellableStatus_ShouldCancelOrder(OrderStatus status)
+    public async Task CancelOrderForCustomerAsync_WithCancellableStatus_ShouldCancelOrderAndAddOutboxMessage(OrderStatus status)
     {
         // Arrange
         var customerId = Guid.NewGuid();
@@ -331,6 +305,14 @@ public class OrderingServiceTests
 
         var savedOrder = await _dbContext.Orders.SingleAsync();
         Assert.Equal(OrderStatus.Cancelled, savedOrder.Status);
+
+        var message = await _dbContext.OutboxMessages.SingleAsync();
+        Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
+
+        var orderCancelled = ReadOutboxEvent<OrderCancelledEvent>(message);
+        Assert.Equal(order.Id, orderCancelled.OrderId);
+        Assert.Equal(customerId, orderCancelled.CustomerId);
+        Assert.Equal(Roles.Customer, orderCancelled.CancelledBy);
     }
 
     [Theory]
@@ -338,7 +320,7 @@ public class OrderingServiceTests
     [InlineData(OrderStatus.Delivered)]
     [InlineData(OrderStatus.Cancelled)]
     [InlineData(OrderStatus.Failed)]
-    public async Task CancelOrderForCustomerAsync_WithNonCancellableStatus_ShouldReturnConflict(OrderStatus status)
+    public async Task CancelOrderForCustomerAsync_WithNonCancellableStatus_ShouldReturnConflictAndAddNoOutboxMessage(OrderStatus status)
     {
         // Arrange
         var customerId = Guid.NewGuid();
@@ -355,6 +337,7 @@ public class OrderingServiceTests
 
         var savedOrder = await _dbContext.Orders.SingleAsync();
         Assert.Equal(status, savedOrder.Status);
+        Assert.Empty(_dbContext.OutboxMessages);
     }
 
     [Fact]
@@ -376,47 +359,6 @@ public class OrderingServiceTests
         Assert.Equal(OrderStatus.Pending, savedOrder.Status);
     }
 
-    [Fact]
-    public async Task CancelOrderForCustomerAsync_WithCancellableStatus_ShouldAddOrderCancelledOutboxMessage()
-    {
-        // Arrange
-        var customerId = Guid.NewGuid();
-        var order = CreateTestOrder(customerId);
-        _dbContext.Orders.Add(order);
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _orderingService.CancelOrderForCustomerAsync(customerId, order.Id);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-
-        var message = await _dbContext.OutboxMessages.SingleAsync();
-        Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
-
-        var orderCancelled = ReadOutboxEvent<OrderCancelledEvent>(message);
-        Assert.Equal(order.Id, orderCancelled.OrderId);
-        Assert.Equal(customerId, orderCancelled.CustomerId);
-        Assert.Equal(Roles.Customer, orderCancelled.CancelledBy);
-    }
-
-    [Fact]
-    public async Task CancelOrderForCustomerAsync_WithNonCancellableStatus_ShouldNotAddOutboxMessage()
-    {
-        // Arrange
-        var customerId = Guid.NewGuid();
-        var order = CreateTestOrder(customerId, OrderStatus.Shipped);
-        _dbContext.Orders.Add(order);
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _orderingService.CancelOrderForCustomerAsync(customerId, order.Id);
-
-        // Assert
-        Assert.False(result.IsSuccess);
-        Assert.Empty(_dbContext.OutboxMessages);
-    }
-
     #endregion
 
     #region CancelOrderForAdminAsync Tests
@@ -424,7 +366,7 @@ public class OrderingServiceTests
     [Theory]
     [InlineData(OrderStatus.Shipped)]
     [InlineData(OrderStatus.Delivered)]
-    public async Task CancelOrderForAdminAsync_WithAnyStatus_ShouldCancelOrder(OrderStatus status)
+    public async Task CancelOrderForAdminAsync_WithAnyStatus_ShouldCancelOrderAndAddOutboxMessage(OrderStatus status)
     {
         // Arrange
         var order = CreateTestOrder(status: status);
@@ -438,6 +380,10 @@ public class OrderingServiceTests
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
         Assert.Equal(OrderStatus.Cancelled, result.Value.Status);
+
+        var message = await _dbContext.OutboxMessages.SingleAsync();
+        Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
+        Assert.Equal(Roles.Admin, ReadOutboxEvent<OrderCancelledEvent>(message).CancelledBy);
     }
 
     [Fact]
@@ -449,25 +395,6 @@ public class OrderingServiceTests
         // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
-    }
-
-    [Fact]
-    public async Task CancelOrderForAdminAsync_WithActiveOrder_ShouldAddOrderCancelledOutboxMessage()
-    {
-        // Arrange
-        var order = CreateTestOrder(status: OrderStatus.Shipped);
-        _dbContext.Orders.Add(order);
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _orderingService.CancelOrderForAdminAsync(order.Id);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-
-        var message = await _dbContext.OutboxMessages.SingleAsync();
-        Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
-        Assert.Equal(Roles.Admin, ReadOutboxEvent<OrderCancelledEvent>(message).CancelledBy);
     }
 
     [Fact]
@@ -492,15 +419,19 @@ public class OrderingServiceTests
 
     #region UpdateOrderAsync Tests
 
-    [Fact]
-    public async Task UpdateOrderAsync_WithAnyStatus_ShouldSetStatus()
+    [Theory]
+    [InlineData(OrderStatus.Delivered, OrderStatus.Pending, false)]
+    [InlineData(OrderStatus.Pending, OrderStatus.Shipped, false)]
+    [InlineData(OrderStatus.Confirmed, OrderStatus.Cancelled, true)]
+    public async Task UpdateOrderAsync_WithAnyStatus_ShouldSetStatusAndAddOutboxMessageOnlyWhenCancelled(
+        OrderStatus currentStatus, OrderStatus newStatus, bool expectsOutboxMessage)
     {
         // Arrange
-        var order = CreateTestOrder(status: OrderStatus.Delivered);
+        var order = CreateTestOrder(status: currentStatus);
         _dbContext.Orders.Add(order);
         await _dbContext.SaveChangesAsync();
 
-        var request = new AdminUpdateOrderRequest(Status: OrderStatus.Pending);
+        var request = new AdminUpdateOrderRequest(Status: newStatus);
 
         // Act
         var result = await _orderingService.UpdateOrderAsync(order.Id, request);
@@ -508,8 +439,19 @@ public class OrderingServiceTests
         // Assert
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
-        Assert.Equal(OrderStatus.Pending, result.Value.Status);
+        Assert.Equal(newStatus, result.Value.Status);
         Assert.Equal("1 Test Street", result.Value.ShippingAddress);
+
+        if (expectsOutboxMessage)
+        {
+            var message = await _dbContext.OutboxMessages.SingleAsync();
+            Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
+            Assert.Equal(Roles.Admin, ReadOutboxEvent<OrderCancelledEvent>(message).CancelledBy);
+        }
+        else
+        {
+            Assert.Empty(_dbContext.OutboxMessages);
+        }
     }
 
     [Fact]
@@ -546,55 +488,18 @@ public class OrderingServiceTests
         Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
     }
 
-    [Fact]
-    public async Task UpdateOrderAsync_WithCancelledStatus_ShouldAddOrderCancelledOutboxMessage()
-    {
-        // Arrange
-        var order = CreateTestOrder(status: OrderStatus.Confirmed);
-        _dbContext.Orders.Add(order);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new AdminUpdateOrderRequest(Status: OrderStatus.Cancelled);
-
-        // Act
-        var result = await _orderingService.UpdateOrderAsync(order.Id, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-
-        var message = await _dbContext.OutboxMessages.SingleAsync();
-        Assert.Equal(RoutingKeys.OrderCancelled, message.Type);
-        Assert.Equal(Roles.Admin, ReadOutboxEvent<OrderCancelledEvent>(message).CancelledBy);
-    }
-
-    [Fact]
-    public async Task UpdateOrderAsync_WithNonCancelledStatus_ShouldNotAddOutboxMessage()
-    {
-        // Arrange
-        var order = CreateTestOrder(status: OrderStatus.Pending);
-        _dbContext.Orders.Add(order);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new AdminUpdateOrderRequest(Status: OrderStatus.Shipped);
-
-        // Act
-        var result = await _orderingService.UpdateOrderAsync(order.Id, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.Empty(_dbContext.OutboxMessages);
-    }
-
     #endregion
 
     #region GetOrderForCustomerAsync Tests
 
     [Fact]
-    public async Task GetOrderForCustomerAsync_WithOwnOrder_ShouldReturnOrderWithItems()
+    public async Task GetOrderForCustomerAsync_WithOwnOrder_ShouldReturnOrderWithItemsAndPaymentDetails()
     {
         // Arrange
         var customerId = Guid.NewGuid();
-        var order = CreateTestOrder(customerId);
+        var order = CreateTestOrder(customerId, OrderStatus.PaymentFailed);
+        order.PaymentAttempts = 2;
+        order.PaymentFailureReason = "Your card was declined.";
         _dbContext.Orders.Add(order);
         await _dbContext.SaveChangesAsync();
 
@@ -607,6 +512,8 @@ public class OrderingServiceTests
         Assert.Equal(order.Id, result.Value.Id);
         Assert.Equal("1 Test Street", result.Value.ShippingAddress);
         Assert.Single(result.Value.Items);
+        Assert.Equal("Your card was declined.", result.Value.PaymentFailureReason);
+        Assert.Equal(MaxRetries - 1, result.Value.PaymentRetriesRemaining);
     }
 
     [Fact]
@@ -651,8 +558,10 @@ public class OrderingServiceTests
     }
 
 
-    [Fact]
-    public async Task GetOrdersForCustomerAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+    [Theory]
+    [InlineData(2, 2)]
+    [InlineData(10, 0)]
+    public async Task GetOrdersForCustomerAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals(int page, int expectedItemCount)
     {
         // Arrange
         var customerId = Guid.NewGuid();
@@ -661,33 +570,15 @@ public class OrderingServiceTests
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _orderingService.GetOrdersForCustomerAsync(customerId, new OrderQuery(Page: 2, PageSize: 2));
+        var result = await _orderingService.GetOrdersForCustomerAsync(customerId, new OrderQuery(Page: page, PageSize: 2));
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Value!.Items.Count);
-        Assert.Equal(2, result.Value.Page);
+        Assert.Equal(expectedItemCount, result.Value!.Items.Count);
+        Assert.Equal(page, result.Value.Page);
         Assert.Equal(2, result.Value.PageSize);
         Assert.Equal(5, result.Value.TotalCount);
         Assert.Equal(3, result.Value.TotalPages);
-    }
-
-    [Fact]
-    public async Task GetOrdersForCustomerAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
-    {
-        // Arrange
-        var customerId = Guid.NewGuid();
-        _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(customerId)));
-        _dbContext.Orders.Add(CreateTestOrder(Guid.NewGuid()));
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _orderingService.GetOrdersForCustomerAsync(customerId, new OrderQuery(Page: 10, PageSize: 2));
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.Empty(result.Value!.Items);
-        Assert.Equal(5, result.Value.TotalCount);
     }
 
     [Fact]
@@ -736,39 +627,25 @@ public class OrderingServiceTests
     }
 
 
-    [Fact]
-    public async Task GetOrdersForAdminAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+    [Theory]
+    [InlineData(2, 2)]
+    [InlineData(10, 0)]
+    public async Task GetOrdersForAdminAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals(int page, int expectedItemCount)
     {
         // Arrange
         _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(Guid.NewGuid())));
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _orderingService.GetOrdersForAdminAsync(new OrderQuery(Page: 2, PageSize: 2));
+        var result = await _orderingService.GetOrdersForAdminAsync(new OrderQuery(Page: page, PageSize: 2));
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Value!.Items.Count);
-        Assert.Equal(2, result.Value.Page);
+        Assert.Equal(expectedItemCount, result.Value!.Items.Count);
+        Assert.Equal(page, result.Value.Page);
         Assert.Equal(2, result.Value.PageSize);
         Assert.Equal(5, result.Value.TotalCount);
         Assert.Equal(3, result.Value.TotalPages);
-    }
-
-    [Fact]
-    public async Task GetOrdersForAdminAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
-    {
-        // Arrange
-        _dbContext.Orders.AddRange(Enumerable.Range(1, 5).Select(_ => CreateTestOrder(Guid.NewGuid())));
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _orderingService.GetOrdersForAdminAsync(new OrderQuery(Page: 10, PageSize: 2));
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.Empty(result.Value!.Items);
-        Assert.Equal(5, result.Value.TotalCount);
     }
 
     [Fact]
@@ -827,32 +704,18 @@ public class OrderingServiceTests
         Assert.Equal(order.TotalAmount, confirmed.TotalAmount);
     }
 
-    [Fact]
-    public async Task ConfirmOrderPaymentAsync_StaleAttempt_ShouldIgnoreResult()
-    {
-        // Arrange
-        var order = await SeedPaymentOrderAsync(paymentAttempts: 2);
-
-        // Act
-        var result = await _orderingService.ConfirmOrderPaymentAsync(order.Id, 1);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.False(result.Value);
-        Assert.Equal(OrderStatus.Pending, (await _dbContext.Orders.AsNoTracking().SingleAsync()).Status);
-        Assert.Empty(_dbContext.OutboxMessages);
-    }
-
     [Theory]
-    [InlineData(OrderStatus.Confirmed)]
-    [InlineData(OrderStatus.Cancelled)]
-    public async Task ConfirmOrderPaymentAsync_OrderNotPending_ShouldIgnoreResult(OrderStatus status)
+    [InlineData(OrderStatus.Pending, 2, 1)]
+    [InlineData(OrderStatus.Confirmed, 1, 1)]
+    [InlineData(OrderStatus.Cancelled, 1, 1)]
+    public async Task ConfirmOrderPaymentAsync_StaleAttemptOrOrderNotPending_ShouldIgnoreResult(
+        OrderStatus status, int currentAttempt, int reportedAttempt)
     {
         // Arrange
-        var order = await SeedPaymentOrderAsync(status);
+        var order = await SeedPaymentOrderAsync(status, paymentAttempts: currentAttempt);
 
         // Act
-        var result = await _orderingService.ConfirmOrderPaymentAsync(order.Id, 1);
+        var result = await _orderingService.ConfirmOrderPaymentAsync(order.Id, reportedAttempt);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -876,21 +739,26 @@ public class OrderingServiceTests
 
     #region FailOrderPaymentAsync Tests
 
-    [Fact]
-    public async Task FailOrderPaymentAsync_RetriesRemaining_ShouldSetPaymentFailedAndQueueEvent()
+    [Theory]
+    [InlineData(MaxRetries, 1, OrderStatus.PaymentFailed, MaxRetries)]
+    [InlineData(MaxRetries, MaxRetries + 1, OrderStatus.Failed, 0)]
+    [InlineData(0, 1, OrderStatus.Failed, 0)]
+    public async Task FailOrderPaymentAsync_CurrentAttempt_ShouldSetStatusFromRemainingRetriesAndQueueEvent(
+        int maxRetries, int attempt, OrderStatus expectedStatus, int expectedRetriesRemaining)
     {
         // Arrange
-        var order = await SeedPaymentOrderAsync(paymentAttempts: 1);
+        var orderingService = CreateService(maxRetries);
+        var order = await SeedPaymentOrderAsync(paymentAttempts: attempt);
 
         // Act
-        var result = await _orderingService.FailOrderPaymentAsync(order.Id, 1, "Your card was declined.");
+        var result = await orderingService.FailOrderPaymentAsync(order.Id, attempt, "Your card was declined.");
 
         // Assert
         Assert.True(result.IsSuccess);
         Assert.True(result.Value);
 
         var saved = await _dbContext.Orders.AsNoTracking().SingleAsync();
-        Assert.Equal(OrderStatus.PaymentFailed, saved.Status);
+        Assert.Equal(expectedStatus, saved.Status);
         Assert.Equal("Your card was declined.", saved.PaymentFailureReason);
 
         var message = await _dbContext.OutboxMessages.SingleAsync();
@@ -898,43 +766,7 @@ public class OrderingServiceTests
         var failed = ReadOutboxEvent<OrderPaymentFailedEvent>(message);
         Assert.Equal(order.Id, failed.OrderId);
         Assert.Equal("Your card was declined.", failed.Reason);
-        Assert.Equal(MaxRetries, failed.RetriesRemaining);
-    }
-
-    [Fact]
-    public async Task FailOrderPaymentAsync_LastRetryFails_ShouldSetFailed()
-    {
-        // Arrange
-        var lastAttempt = MaxRetries + 1;
-        var order = await SeedPaymentOrderAsync(paymentAttempts: lastAttempt);
-
-        // Act
-        var result = await _orderingService.FailOrderPaymentAsync(order.Id, lastAttempt, "Your card has insufficient funds.");
-
-        // Assert
-        Assert.True(result.IsSuccess);
-
-        var saved = await _dbContext.Orders.AsNoTracking().SingleAsync();
-        Assert.Equal(OrderStatus.Failed, saved.Status);
-        Assert.Equal("Your card has insufficient funds.", saved.PaymentFailureReason);
-
-        var failed = ReadOutboxEvent<OrderPaymentFailedEvent>(await _dbContext.OutboxMessages.SingleAsync());
-        Assert.Equal(0, failed.RetriesRemaining);
-    }
-
-    [Fact]
-    public async Task FailOrderPaymentAsync_RetriesDisabledInConfig_ShouldSetFailedOnFirstFailure()
-    {
-        // Arrange
-        var orderingService = CreateService(maxRetries: 0);
-        var order = await SeedPaymentOrderAsync(paymentAttempts: 1);
-
-        // Act
-        var result = await orderingService.FailOrderPaymentAsync(order.Id, 1, "Your card was declined.");
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.Equal(OrderStatus.Failed, (await _dbContext.Orders.AsNoTracking().SingleAsync()).Status);
+        Assert.Equal(expectedRetriesRemaining, failed.RetriesRemaining);
     }
 
     [Fact]
@@ -1012,14 +844,16 @@ public class OrderingServiceTests
     }
 
     [Theory]
-    [InlineData(OrderStatus.Pending)]
-    [InlineData(OrderStatus.Confirmed)]
-    [InlineData(OrderStatus.Failed)]
-    public async Task RetryOrderPaymentAsync_OrderNotPaymentFailed_ShouldReturnConflict(OrderStatus status)
+    [InlineData(OrderStatus.Pending, 1)]
+    [InlineData(OrderStatus.Confirmed, 1)]
+    [InlineData(OrderStatus.Failed, 1)]
+    [InlineData(OrderStatus.PaymentFailed, MaxRetries + 1)]
+    public async Task RetryOrderPaymentAsync_OrderNotRetryable_ShouldReturnConflictAndAddNoOutboxMessage(
+        OrderStatus status, int paymentAttempts)
     {
         // Arrange
         var customerId = Guid.NewGuid();
-        var order = await SeedPaymentOrderAsync(status, customerId: customerId);
+        var order = await SeedPaymentOrderAsync(status, paymentAttempts, customerId);
 
         // Act
         var result = await _orderingService.RetryOrderPaymentAsync(customerId, order.Id, new RetryOrderPaymentRequest("pm_card_visa"));
@@ -1028,21 +862,6 @@ public class OrderingServiceTests
         Assert.False(result.IsSuccess);
         Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
         Assert.Empty(_dbContext.OutboxMessages);
-    }
-
-    [Fact]
-    public async Task RetryOrderPaymentAsync_NoRetriesRemaining_ShouldReturnConflict()
-    {
-        // Arrange
-        var customerId = Guid.NewGuid();
-        var order = await SeedPaymentOrderAsync(OrderStatus.PaymentFailed, paymentAttempts: MaxRetries + 1, customerId: customerId);
-
-        // Act
-        var result = await _orderingService.RetryOrderPaymentAsync(customerId, order.Id, new RetryOrderPaymentRequest("pm_card_visa"));
-
-        // Assert
-        Assert.False(result.IsSuccess);
-        Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
     }
 
     [Fact]
@@ -1057,26 +876,6 @@ public class OrderingServiceTests
         // Assert
         Assert.False(result.IsSuccess);
         Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
-    }
-
-    [Fact]
-    public async Task GetOrderForCustomerAsync_PaymentFailedOrder_ShouldReturnReasonAndRetriesRemaining()
-    {
-        // Arrange
-        var customerId = Guid.NewGuid();
-        var order = CreateTestOrder(customerId, OrderStatus.PaymentFailed);
-        order.PaymentAttempts = 2;
-        order.PaymentFailureReason = "Your card was declined.";
-        _dbContext.Orders.Add(order);
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _orderingService.GetOrderForCustomerAsync(customerId, order.Id);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.Equal("Your card was declined.", result.Value!.PaymentFailureReason);
-        Assert.Equal(MaxRetries - 1, result.Value.PaymentRetriesRemaining);
     }
 
     #endregion

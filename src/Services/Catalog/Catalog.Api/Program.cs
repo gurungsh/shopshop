@@ -1,3 +1,4 @@
+using BuildingBlocks.Web.Observability;
 using Catalog.Api.Cacheing;
 using Catalog.Api.Caching;
 using Catalog.Api.Endpoints;
@@ -25,8 +26,12 @@ try
 
     // Serilog
     builder.Host.UseSerilog((context, services, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration)
-    .ReadFrom.Services(services));
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .WriteToOtlp("Catalog.Api"));
+
+    // OpenTelemetry
+    builder.Services.AddShopShopTelemetry("Catalog.Api");
 
     // Configuration and options
     var jwtSettings = builder.Configuration

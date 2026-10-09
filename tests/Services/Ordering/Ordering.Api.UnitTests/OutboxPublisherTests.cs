@@ -1,4 +1,5 @@
-﻿using BuildingBlocks.Contracts.Orders;
+﻿using System.Diagnostics;
+using BuildingBlocks.Contracts.Orders;
 using BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,14 +53,15 @@ public class OutboxPublisherTests
         return await dbContext.OutboxMessages.AsNoTracking().OrderBy(m => m.OccurredAtUtc).ToListAsync();
     }
 
-    private static OutboxMessage CreateTestMessage(DateTime occurredAtUtc, DateTime? processedAtUtc = null)
+    private static OutboxMessage CreateTestMessage(DateTime occurredAtUtc, DateTime? processedAtUtc = null, string? traceParent = null)
     {
         return new OutboxMessage
         {
             Type = RoutingKeys.OrderPlaced,
             Payload = "{\"orderId\":\"00000000-0000-0000-0000-000000000001\"}",
             OccurredAtUtc = occurredAtUtc,
-            ProcessedAtUtc = processedAtUtc
+            ProcessedAtUtc = processedAtUtc,
+            TraceParent = traceParent
         };
     }
 
@@ -166,6 +168,47 @@ public class OutboxPublisherTests
         var messages = await GetMessagesAsync();
         Assert.Equal(2, messages.Count(m => m.ProcessedAtUtc is not null));
         Assert.Null(messages[2].ProcessedAtUtc);
+    }
+
+    [Theory]
+    [InlineData("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", "0af7651916cd43dd8448eb211c80319c")]
+    [InlineData(null, null)]
+    [InlineData("not-a-trace", null)]
+    public async Task PublishPendingAsync_ShouldContinueSavedTraceWhenValidAndStillPublishWhenMissingOrInvalid(
+        string? traceParent, string? expectedTraceId)
+    {
+        // Arrange
+        await SeedAsync(CreateTestMessage(DateTime.UtcNow.AddMinutes(-1), traceParent: traceParent));
+
+        // Without a listener StartActivity returns null, as it does when no exporter is configured
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == OutboxTracing.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        string? publishedTraceId = null;
+        _mockPublisher
+            .Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ReadOnlyMemory<byte>>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, string, ReadOnlyMemory<byte>, CancellationToken>((_, _, _, _, _) => publishedTraceId = Activity.Current?.TraceId.ToString())
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var published = await _outboxPublisher.PublishPendingAsync(CancellationToken.None);
+
+        // Assert
+        Assert.Equal(1, published);
+        Assert.NotNull((await GetMessagesAsync()).Single().ProcessedAtUtc);
+
+        if (expectedTraceId is not null)
+        {
+            Assert.Equal(expectedTraceId, publishedTraceId);
+        }
+        else
+        {
+            Assert.NotNull(publishedTraceId);
+        }
     }
 
     #endregion

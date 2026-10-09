@@ -1,4 +1,5 @@
 using BuildingBlocks.Messaging;
+using BuildingBlocks.Web.Observability;
 using Microsoft.AspNetCore.Diagnostics;
 using Notification.Api.Messaging;
 using Notification.Api.Services;
@@ -18,7 +19,11 @@ try
     // Serilog
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
-        .ReadFrom.Services(services));
+        .ReadFrom.Services(services)
+        .WriteToOtlp("Notification.Api"));
+
+    // OpenTelemetry
+    builder.Services.AddShopShopTelemetry("Notification.Api");
 
     // Application business services
     builder.Services.AddScoped<INotificationService, NotificationService>();

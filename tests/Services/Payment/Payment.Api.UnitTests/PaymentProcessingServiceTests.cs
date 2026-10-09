@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using BuildingBlocks.Contracts.Payments;
 using BuildingBlocks.Core;
@@ -50,10 +51,15 @@ public class PaymentProcessingServiceTests
 
     #region ProcessPaymentAsync Tests
 
-    [Fact]
-    public async Task ProcessPaymentAsync_ChargeSucceeds_ShouldRecordPaymentAndQueuePaymentSucceeded()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ProcessPaymentAsync_ChargeSucceeds_ShouldRecordPaymentAndQueuePaymentSucceededWithCurrentTraceParent(bool hasActiveTrace)
     {
         // Arrange
+        Activity.Current = null;
+        using var activity = hasActiveTrace ? new Activity("test-delivery").Start() : null;
+
         var request = CreateRequest(attempt: 2, amount: 49.99m);
         SetupCharge(Result<PaymentChargeResult>.Success(new PaymentChargeResult(PaymentStatus.Succeeded, null, "pi_123")));
 
@@ -73,6 +79,7 @@ public class PaymentProcessingServiceTests
 
         var message = await _dbContext.OutboxMessages.SingleAsync();
         Assert.Equal(PaymentRoutingKeys.PaymentSucceeded, message.Type);
+        Assert.Equal(activity?.Id, message.TraceParent);
         var succeeded = ReadOutboxEvent<PaymentSucceededEvent>(message);
         Assert.Equal(request.OrderId, succeeded.OrderId);
         Assert.Equal(payment.Id, succeeded.PaymentId);

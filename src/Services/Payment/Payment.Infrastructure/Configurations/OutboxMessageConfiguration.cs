@@ -26,6 +26,9 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
         builder.Property(m => m.LastError)
             .HasMaxLength(2000);
 
+        builder.Property(m => m.TraceParent)
+            .HasMaxLength(100);
+
         builder.HasIndex(m => m.ProcessedAtUtc);
     }
 }

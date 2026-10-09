@@ -9,4 +9,5 @@ public class OutboxMessage
     public DateTime? ProcessedAtUtc { get; set; }
     public int Attempts { get; set; }
     public string? LastError { get; set; }
+    public string? TraceParent { get; set; }
 }

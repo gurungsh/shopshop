@@ -433,7 +433,8 @@ public class OrderingService : IOrderingService
         _dbContext.OutboxMessages.Add(new OutboxMessage
         {
             Type = routingKey,
-            Payload = MessageSerializer.Serialize(@event)
+            Payload = MessageSerializer.Serialize(@event),
+            TraceParent = OutboxTracing.CaptureTraceParent()
         });
     }
 

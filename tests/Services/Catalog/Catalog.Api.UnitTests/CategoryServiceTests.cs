@@ -1,4 +1,4 @@
-﻿using BuildingBlocks.Core;
+using BuildingBlocks.Core;
 using Catalog.Api.Cacheing;
 using Catalog.Api.Caching;
 using Catalog.Api.DTOs;
@@ -57,8 +57,10 @@ public class CategoryServiceTests
         Assert.Equal(2, result.Value.Items.Count);
     }
 
-    [Fact]
-    public async Task GetCategoriesAsync_WithMatchingNameFilter_ShouldReturnFilteredCategories()
+    [Theory]
+    [InlineData("Electronics", 1)]
+    [InlineData("Nonexistent", 0)]
+    public async Task GetCategoriesAsync_WithNameFilter_ShouldReturnMatchingCategories(string name, int expectedCount)
     {
         // Arrange
         _dbContext.Categories.AddRange(
@@ -66,7 +68,7 @@ public class CategoryServiceTests
             new Category { Name = "Books", Description = "Reading material" });
         await _dbContext.SaveChangesAsync();
 
-        var query = new CategoryQuery(Name: "Electronics");
+        var query = new CategoryQuery(Name: name);
 
         // Act
         var result = await _categoryService.GetCategoriesAsync(query);
@@ -74,26 +76,8 @@ public class CategoryServiceTests
         // Assert
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
-        Assert.Single(result.Value.Items);
-        Assert.Equal("Electronics", result.Value.Items[0].Name);
-    }
-
-    [Fact]
-    public async Task GetCategoriesAsync_WithNonMatchingNameFilter_ShouldReturnEmptyList()
-    {
-        // Arrange
-        _dbContext.Categories.Add(new Category { Name = "Electronics", Description = "Gadgets" });
-        await _dbContext.SaveChangesAsync();
-
-        var query = new CategoryQuery(Name: "Nonexistent");
-
-        // Act
-        var result = await _categoryService.GetCategoriesAsync(query);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Empty(result.Value.Items);
+        Assert.Equal(expectedCount, result.Value.Items.Count);
+        Assert.All(result.Value.Items, c => Assert.Equal(name, c.Name));
     }
 
     [Fact]
@@ -183,9 +167,10 @@ public class CategoryServiceTests
         Assert.Equal(category1.Id, result.Value.Items[0].Id);
     }
 
-
-    [Fact]
-    public async Task GetCategoriesAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals()
+    [Theory]
+    [InlineData(2, 2)]
+    [InlineData(10, 0)]
+    public async Task GetCategoriesAsync_WithPageAndPageSize_ShouldReturnRequestedPageAndTotals(int page, int expectedItemCount)
     {
         // Arrange
         _dbContext.Categories.AddRange(Enumerable.Range(1, 5).Select(i =>
@@ -193,32 +178,15 @@ public class CategoryServiceTests
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _categoryService.GetCategoriesAsync(new CategoryQuery(Page: 2, PageSize: 2));
+        var result = await _categoryService.GetCategoriesAsync(new CategoryQuery(Page: page, PageSize: 2));
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Value!.Items.Count);
-        Assert.Equal(2, result.Value.Page);
+        Assert.Equal(expectedItemCount, result.Value!.Items.Count);
+        Assert.Equal(page, result.Value.Page);
         Assert.Equal(2, result.Value.PageSize);
         Assert.Equal(5, result.Value.TotalCount);
         Assert.Equal(3, result.Value.TotalPages);
-    }
-
-    [Fact]
-    public async Task GetCategoriesAsync_WithPageBeyondLastPage_ShouldReturnEmptyItemsAndTotalCount()
-    {
-        // Arrange
-        _dbContext.Categories.AddRange(Enumerable.Range(1, 5).Select(i =>
-            new Category { Name = $"Category {i}", Description = "Description" }));
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _categoryService.GetCategoriesAsync(new CategoryQuery(Page: 10, PageSize: 2));
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.Empty(result.Value!.Items);
-        Assert.Equal(5, result.Value.TotalCount);
     }
 
     [Fact]
@@ -244,7 +212,7 @@ public class CategoryServiceTests
     #region GetCategoryAsync Tests
 
     [Fact]
-    public async Task GetCategoryAsync_WithExistingId_ShouldReturnCategory()
+    public async Task GetCategoryAsync_WithExistingId_ShouldReturnCategoryAndStoreItInCache()
     {
         // Arrange
         var category = new Category { Name = "Electronics", Description = "Gadgets" };
@@ -260,10 +228,15 @@ public class CategoryServiceTests
         Assert.Equal(category.Id, result.Value.Id);
         Assert.Equal("Electronics", result.Value.Name);
         Assert.Equal("Gadgets", result.Value.Description);
+
+        _cache.Verify(c => c.SetAsync(
+            CatalogCacheKeys.Category(category.Id),
+            It.IsAny<CategoryResponse>(),
+            It.IsAny<TimeSpan>()), Times.Once);
     }
 
     [Fact]
-    public async Task GetCategoryAsync_WithNonexistentId_ShouldReturnNotFoundError()
+    public async Task GetCategoryAsync_WithNonexistentId_ShouldReturnNotFoundErrorAndCacheNothing()
     {
         // Arrange
         var nonexistentId = Guid.NewGuid();
@@ -275,6 +248,11 @@ public class CategoryServiceTests
         Assert.False(result.IsSuccess);
         Assert.Equal("Category not found.", result.Error);
         Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+
+        _cache.Verify(c => c.SetAsync(
+            It.IsAny<string>(),
+            It.IsAny<CategoryResponse>(),
+            It.IsAny<TimeSpan>()), Times.Never);
     }
 
     #endregion
@@ -282,13 +260,15 @@ public class CategoryServiceTests
     #region CreateCategoryAsync Tests
 
     [Fact]
-    public async Task CreateCategoryAsync_WithValidRequest_ShouldCreateCategory()
+    public async Task CreateCategoryAsync_WithValidRequest_ShouldCreateActiveCategoryAndBumpCatalogVersion()
     {
         // Arrange
         var request = new AdminCreateCategoryRequest("Electronics", "Gadgets and devices");
+        var beforeCreate = DateTime.UtcNow;
 
         // Act
         var result = await _categoryService.CreateCategoryAsync(request);
+        var afterCreate = DateTime.UtcNow;
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -297,10 +277,14 @@ public class CategoryServiceTests
         Assert.Equal("Gadgets and devices", result.Value.Description);
         Assert.True(result.Value.IsActive);
         Assert.NotEqual(Guid.Empty, result.Value.Id);
+        Assert.InRange(result.Value.CreatedAtUtc, beforeCreate, afterCreate);
+        Assert.InRange(result.Value.UpdatedAtUtc, beforeCreate, afterCreate);
 
         var createdCategory = await _dbContext.Categories.FirstOrDefaultAsync(c => c.Name == "Electronics");
         Assert.NotNull(createdCategory);
         Assert.Equal("Gadgets and devices", createdCategory.Description);
+
+        _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
     }
 
     [Fact]
@@ -318,45 +302,21 @@ public class CategoryServiceTests
         Assert.Equal(string.Empty, result.Value.Description);
     }
 
-    [Fact]
-    public async Task CreateCategoryAsync_WithValidRequest_ShouldDefaultIsActiveToTrue()
-    {
-        // Arrange
-        var request = new AdminCreateCategoryRequest("Electronics", "Gadgets");
-
-        // Act
-        var result = await _categoryService.CreateCategoryAsync(request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.True(result.Value.IsActive);
-    }
-
-    [Fact]
-    public async Task CreateCategoryAsync_WithValidRequest_ShouldSetCreatedAndUpdatedTimestamps()
-    {
-        // Arrange
-        var request = new AdminCreateCategoryRequest("Electronics", "Gadgets");
-        var beforeCreate = DateTime.UtcNow;
-
-        // Act
-        var result = await _categoryService.CreateCategoryAsync(request);
-        var afterCreate = DateTime.UtcNow;
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.InRange(result.Value.CreatedAtUtc, beforeCreate, afterCreate);
-        Assert.InRange(result.Value.UpdatedAtUtc, beforeCreate, afterCreate);
-    }
-
     #endregion
 
     #region UpdateCategoryAsync Tests
 
-    [Fact]
-    public async Task UpdateCategoryAsync_WithNameOnly_ShouldUpdateNameAndKeepOtherFields()
+    [Theory]
+    [InlineData("Consumer Electronics", null, null, "Consumer Electronics", "Gadgets", true)]
+    [InlineData(null, "Updated description", null, "Electronics", "Updated description", true)]
+    [InlineData(null, "", null, "Electronics", "", true)]
+    [InlineData(null, null, false, "Electronics", "Gadgets", false)]
+    [InlineData("   ", null, null, "Electronics", "Gadgets", true)]
+    [InlineData(null, null, null, "Electronics", "Gadgets", true)]
+    [InlineData("Consumer Electronics", "Updated description", false, "Consumer Electronics", "Updated description", false)]
+    public async Task UpdateCategoryAsync_WithPartialRequest_ShouldUpdateOnlyProvidedFieldsAndInvalidateCache(
+        string? name, string? description, bool? isActive,
+        string expectedName, string expectedDescription, bool expectedIsActive)
     {
         // Arrange
         var category = new Category
@@ -368,7 +328,7 @@ public class CategoryServiceTests
         _dbContext.Categories.Add(category);
         await _dbContext.SaveChangesAsync();
 
-        var request = new AdminUpdateCategoryRequest(Name: "Consumer Electronics");
+        var request = new AdminUpdateCategoryRequest(name, description, isActive);
 
         // Act
         var result = await _categoryService.UpdateCategoryAsync(category.Id, request);
@@ -376,161 +336,12 @@ public class CategoryServiceTests
         // Assert
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
-        Assert.Equal("Consumer Electronics", result.Value.Name);
-        Assert.Equal("Gadgets", result.Value.Description);
-        Assert.True(result.Value.IsActive);
-    }
+        Assert.Equal(expectedName, result.Value.Name);
+        Assert.Equal(expectedDescription, result.Value.Description);
+        Assert.Equal(expectedIsActive, result.Value.IsActive);
 
-    [Fact]
-    public async Task UpdateCategoryAsync_WithDescriptionOnly_ShouldUpdateDescriptionAndKeepOtherFields()
-    {
-        // Arrange
-        var category = new Category
-        {
-            Name = "Electronics",
-            Description = "Gadgets",
-            IsActive = true
-        };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new AdminUpdateCategoryRequest(Description: "Updated description");
-
-        // Act
-        var result = await _categoryService.UpdateCategoryAsync(category.Id, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal("Electronics", result.Value.Name);
-        Assert.Equal("Updated description", result.Value.Description);
-        Assert.True(result.Value.IsActive);
-    }
-
-    [Fact]
-    public async Task UpdateCategoryAsync_WithEmptyStringDescription_ShouldClearDescription()
-    {
-        // Arrange
-        var category = new Category
-        {
-            Name = "Electronics",
-            Description = "Gadgets",
-            IsActive = true
-        };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new AdminUpdateCategoryRequest(Description: "");
-
-        // Act
-        var result = await _categoryService.UpdateCategoryAsync(category.Id, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal(string.Empty, result.Value.Description);
-    }
-
-    [Fact]
-    public async Task UpdateCategoryAsync_WithIsActiveOnly_ShouldUpdateIsActiveAndKeepOtherFields()
-    {
-        // Arrange
-        var category = new Category
-        {
-            Name = "Electronics",
-            Description = "Gadgets",
-            IsActive = true
-        };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new AdminUpdateCategoryRequest(IsActive: false);
-
-        // Act
-        var result = await _categoryService.UpdateCategoryAsync(category.Id, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal("Electronics", result.Value.Name);
-        Assert.Equal("Gadgets", result.Value.Description);
-        Assert.False(result.Value.IsActive);
-    }
-
-    [Fact]
-    public async Task UpdateCategoryAsync_WithBlankName_ShouldIgnoreNameAndKeepExisting()
-    {
-        // Arrange
-        var category = new Category
-        {
-            Name = "Electronics",
-            Description = "Gadgets",
-            IsActive = true
-        };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new AdminUpdateCategoryRequest(Name: "   ");
-
-        // Act
-        var result = await _categoryService.UpdateCategoryAsync(category.Id, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal("Electronics", result.Value.Name);
-    }
-
-    [Fact]
-    public async Task UpdateCategoryAsync_WithAllFieldsProvided_ShouldUpdateAllFields()
-    {
-        // Arrange
-        var category = new Category
-        {
-            Name = "Electronics",
-            Description = "Gadgets",
-            IsActive = true
-        };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new AdminUpdateCategoryRequest("Consumer Electronics", "Updated description", false);
-
-        // Act
-        var result = await _categoryService.UpdateCategoryAsync(category.Id, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal("Consumer Electronics", result.Value.Name);
-        Assert.Equal("Updated description", result.Value.Description);
-        Assert.False(result.Value.IsActive);
-    }
-
-    [Fact]
-    public async Task UpdateCategoryAsync_WithNoFieldsProvided_ShouldLeaveCategoryUnchanged()
-    {
-        // Arrange
-        var category = new Category
-        {
-            Name = "Electronics",
-            Description = "Gadgets",
-            IsActive = true
-        };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        var request = new AdminUpdateCategoryRequest();
-
-        // Act
-        var result = await _categoryService.UpdateCategoryAsync(category.Id, request);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal("Electronics", result.Value.Name);
-        Assert.Equal("Gadgets", result.Value.Description);
-        Assert.True(result.Value.IsActive);
+        _cache.Verify(c => c.RemoveAsync(CatalogCacheKeys.Category(category.Id)), Times.Once);
+        _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
     }
 
     [Fact]
@@ -559,7 +370,7 @@ public class CategoryServiceTests
     }
 
     [Fact]
-    public async Task UpdateCategoryAsync_WithNonexistentId_ShouldReturnNotFoundError()
+    public async Task UpdateCategoryAsync_WithNonexistentId_ShouldReturnNotFoundErrorAndNotInvalidateCache()
     {
         // Arrange
         var nonexistentId = Guid.NewGuid();
@@ -572,6 +383,9 @@ public class CategoryServiceTests
         Assert.False(result.IsSuccess);
         Assert.Equal("Category not found.", result.Error);
         Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
+
+        _cache.Verify(c => c.RemoveAsync(It.IsAny<string>()), Times.Never);
+        _cache.Verify(c => c.BumpVersionAsync(), Times.Never);
     }
 
     #endregion
@@ -579,7 +393,7 @@ public class CategoryServiceTests
     #region DeleteCategoryAsync Tests
 
     [Fact]
-    public async Task DeleteCategoryAsync_WithExistingId_ShouldDeleteCategory()
+    public async Task DeleteCategoryAsync_WithExistingId_ShouldDeleteCategoryAndInvalidateCache()
     {
         // Arrange
         var category = new Category { Name = "Electronics", Description = "Gadgets" };
@@ -595,6 +409,9 @@ public class CategoryServiceTests
 
         var deletedCategory = await _dbContext.Categories.FirstOrDefaultAsync(c => c.Id == category.Id);
         Assert.Null(deletedCategory);
+
+        _cache.Verify(c => c.RemoveAsync(CatalogCacheKeys.Category(category.Id)), Times.Once);
+        _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
     }
 
     [Fact]
@@ -630,39 +447,6 @@ public class CategoryServiceTests
         // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("Cached", result.Value!.Name);
-    }
-
-    [Fact]
-    public async Task GetCategoryAsync_OnCacheMiss_ShouldStoreResultInCache()
-    {
-        // Arrange
-        var category = new Category { Name = "Books", Description = "Reading material" };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _categoryService.GetCategoryAsync(category.Id);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        _cache.Verify(c => c.SetAsync(
-            CatalogCacheKeys.Category(category.Id),
-            It.IsAny<CategoryResponse>(),
-            It.IsAny<TimeSpan>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task GetCategoryAsync_WhenNotFound_ShouldNotCacheAnything()
-    {
-        // Act
-        var result = await _categoryService.GetCategoryAsync(Guid.NewGuid());
-
-        // Assert
-        Assert.False(result.IsSuccess);
-        _cache.Verify(c => c.SetAsync(
-            It.IsAny<string>(),
-            It.IsAny<CategoryResponse>(),
-            It.IsAny<TimeSpan>()), Times.Never);
     }
 
     [Fact]
@@ -702,63 +486,6 @@ public class CategoryServiceTests
         // Assert
         Assert.True(result.IsSuccess);
         Assert.Single(result.Value!.Items);
-    }
-
-    [Fact]
-    public async Task CreateCategoryAsync_ShouldBumpCatalogVersion()
-    {
-        // Act
-        var result = await _categoryService.CreateCategoryAsync(new AdminCreateCategoryRequest("Books", "Reading"));
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
-    }
-
-    [Fact]
-    public async Task UpdateCategoryAsync_ShouldRemoveEntryAndBumpVersion()
-    {
-        // Arrange
-        var category = new Category { Name = "Books", Description = "Reading material" };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _categoryService.UpdateCategoryAsync(category.Id, new AdminUpdateCategoryRequest(Name: "Novels"));
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        _cache.Verify(c => c.RemoveAsync(CatalogCacheKeys.Category(category.Id)), Times.Once);
-        _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
-    }
-
-    [Fact]
-    public async Task UpdateCategoryAsync_WhenNotFound_ShouldNotInvalidateCache()
-    {
-        // Act
-        var result = await _categoryService.UpdateCategoryAsync(Guid.NewGuid(), new AdminUpdateCategoryRequest(Name: "Novels"));
-
-        // Assert
-        Assert.False(result.IsSuccess);
-        _cache.Verify(c => c.RemoveAsync(It.IsAny<string>()), Times.Never);
-        _cache.Verify(c => c.BumpVersionAsync(), Times.Never);
-    }
-
-    [Fact]
-    public async Task DeleteCategoryAsync_ShouldRemoveEntryAndBumpVersion()
-    {
-        // Arrange
-        var category = new Category { Name = "Books", Description = "Reading material" };
-        _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
-
-        // Act
-        var result = await _categoryService.DeleteCategoryAsync(category.Id);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        _cache.Verify(c => c.RemoveAsync(CatalogCacheKeys.Category(category.Id)), Times.Once);
-        _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
     }
 
     #endregion

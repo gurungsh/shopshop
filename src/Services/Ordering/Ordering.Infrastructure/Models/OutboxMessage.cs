@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Ordering.Infrastructure.Models;
+﻿namespace Ordering.Infrastructure.Models;
 
 public class OutboxMessage
 {
@@ -13,4 +9,5 @@ public class OutboxMessage
     public DateTime? ProcessedAtUtc { get; set; }
     public int Attempts { get; set; }
     public string? LastError { get; set; }
+    public string? TraceParent { get; set; }
 }

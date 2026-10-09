@@ -36,15 +36,16 @@ Every API also exposes `GET /health`. The full endpoint list is in the [API refe
 | Security | JWT Bearer with RS256 signing keys, ASP.NET Core authorization, `PasswordHasher<T>` |
 | Validation | FluentValidation 12 |
 | Resilience | `Microsoft.Extensions.Http.Resilience` (standard resilience handler) |
-| Logging | Serilog (console, CLEF files, request logging) |
+| Logging | Serilog (console, CLEF files, request logging, OTLP sink) |
+| Observability | OpenTelemetry (traces, metrics) and Serilog logs sent over OTLP to a Grafana stack (Tempo, Prometheus, Loki) |
 | API docs | Swashbuckle / Swagger UI with a Bearer scheme |
 | Testing | xUnit, Moq, EF Core InMemory provider, Testcontainers (PostgreSQL, RabbitMQ, Redis) |
 | Caching | Redis 7 (Docker) via `Microsoft.Extensions.Caching.StackExchangeRedis` |
-| Local infrastructure | Docker Compose (PostgreSQL + RabbitMQ with management UI + Redis) |
+| Local infrastructure | Docker Compose (PostgreSQL + RabbitMQ with management UI + Redis + Grafana `otel-lgtm`) |
 
 ## Getting started
 
-1. **Start PostgreSQL, RabbitMQ and Redis.** Create a `.env` file (see [configuration](docs/configuration.md#docker-environment)), then:
+1. **Start PostgreSQL, RabbitMQ, Redis and Grafana.** Create a `.env` file (see [configuration](docs/configuration.md#docker-environment)), then:
 
    ```bash
    docker compose up -d
@@ -87,6 +88,7 @@ Other test payment methods are listed in the [API reference](docs/api.md#payment
 | [Caching](docs/caching.md) | Redis cache-aside for Catalog: keys, TTLs, invalidation |
 | [Testing](docs/testing.md) | Unit vs integration tests, Testcontainers setup, messaging tests |
 | [Gateway](docs/gateway.md) | YARP API gateway: routes, combined Swagger, responsibilities |
+| [Observability](docs/observability.md) | OpenTelemetry traces, metrics and logs in Grafana; one trace per order |
 
 ## Roadmap
 
@@ -100,6 +102,8 @@ Unchecked items are not implemented yet:
 - [x] **Pagination** for all `POST …/search` endpoints (page number, page size, total count)
 - [x] **Redis caching** for Catalog product and category reads (cache-aside, invalidated on admin writes)
 - [x] **Integration tests** with Testcontainers for Identity, Catalog, Ordering, Payment and Notification
+- [x] **OpenTelemetry**: traces, metrics and logs in Grafana, with trace context carried through HTTP, RabbitMQ and the outbox
+- [ ] Readiness health checks
 - [ ] Identity refresh tokens and logout
 - [ ] Containerising all services
 
