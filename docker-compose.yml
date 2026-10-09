@@ -52,6 +52,8 @@ services:
       - "3000:3000"   # Grafana UI
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
+    volumes:
+      - lgtm_data:/data
 
 volumes:
   postgres_data:
