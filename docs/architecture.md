@@ -43,10 +43,15 @@ ShopShop/
 │   ├── Gateway/Gateway.Api.UnitTests
 │   └── Services/
 │       ├── Identity/Identity.Api.UnitTests
+│       ├── Identity/Identity.Api.IntegrationTests
 │       ├── Catalog/Catalog.Api.UnitTests
+│       ├── Catalog/Catalog.Api.IntegrationTests
 │       ├── Ordering/Ordering.Api.UnitTests
+│       ├── Ordering/Ordering.Api.IntegrationTests
 │       ├── Payment/Payment.Api.UnitTests
-│       └── Notification/Notification.Api.UnitTests
+│       ├── Payment/Payment.Api.IntegrationTests
+│       ├── Notification/Notification.Api.UnitTests
+│       └── Notification/Notification.Api.IntegrationTests
 ├── docs/
 ├── docker-compose.yml
 ├── init-dbs.sql

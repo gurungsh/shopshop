@@ -38,7 +38,7 @@ Every API also exposes `GET /health`. The full endpoint list is in the [API refe
 | Resilience | `Microsoft.Extensions.Http.Resilience` (standard resilience handler) |
 | Logging | Serilog (console, CLEF files, request logging) |
 | API docs | Swashbuckle / Swagger UI with a Bearer scheme |
-| Testing | xUnit, Moq, EF Core InMemory provider |
+| Testing | xUnit, Moq, EF Core InMemory provider, Testcontainers (PostgreSQL, RabbitMQ, Redis) |
 | Caching | Redis 7 (Docker) via `Microsoft.Extensions.Caching.StackExchangeRedis` |
 | Local infrastructure | Docker Compose (PostgreSQL + RabbitMQ with management UI + Redis) |
 
@@ -85,6 +85,7 @@ Other test payment methods are listed in the [API reference](docs/api.md#payment
 | [Configuration](docs/configuration.md) | Docker environment, user secrets, signing key, ports |
 | [Messaging](docs/messaging.md) | Exchanges, queues and RabbitMQ gotchas |
 | [Caching](docs/caching.md) | Redis cache-aside for Catalog: keys, TTLs, invalidation |
+| [Testing](docs/testing.md) | Unit vs integration tests, Testcontainers setup, messaging tests |
 | [Gateway](docs/gateway.md) | YARP API gateway: routes, combined Swagger, responsibilities |
 
 ## Roadmap
@@ -98,7 +99,7 @@ Unchecked items are not implemented yet:
 - [x] **API gateway** (YARP) with a combined Swagger UI, CORS, rate limiting and correlation ids
 - [x] **Pagination** for all `POST …/search` endpoints (page number, page size, total count)
 - [x] **Redis caching** for Catalog product and category reads (cache-aside, invalidated on admin writes)
-- [ ] Integration tests with Testcontainers (PostgreSQL, RabbitMQ)
+- [x] **Integration tests** with Testcontainers for Identity, Catalog, Ordering, Payment and Notification
 - [ ] Identity refresh tokens and logout
 - [ ] Containerising all services
 

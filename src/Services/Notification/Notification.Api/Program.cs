@@ -70,3 +70,7 @@ finally
     Log.Information("Shutting down Notification.Api.");
     Log.CloseAndFlush();
 }
+
+
+// Makes Program visible to WebApplicationFactory<Program> in integration tests.
+public partial class Program;

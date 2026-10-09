@@ -2,12 +2,16 @@
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />
     <File Path="docker-compose.yml" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/docs/">
     <File Path="docs/api.md" />
     <File Path="docs/architecture.md" />
+    <File Path="docs/caching.md" />
     <File Path="docs/configuration.md" />
     <File Path="docs/gateway.md" />
     <File Path="docs/messaging.md" />
-    <File Path="README.md" />
+    <File Path="docs/testing.md" />
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/Gateway/">
@@ -45,18 +49,23 @@
   </Folder>
   <Folder Name="/tests/Services/" />
   <Folder Name="/tests/Services/Catalog/">
+    <Project Path="tests/Services/Catalog/Catalog.Api.IntegrationTests/Catalog.Api.IntegrationTests.csproj" />
     <Project Path="tests/Services/Catalog/Catalog.Api.UnitTests/Catalog.Api.UnitTests.csproj" Id="a5d30c12-3643-497a-83f8-4e50dae70833" />
   </Folder>
   <Folder Name="/tests/Services/Identity/">
+    <Project Path="tests/Services/Identity/Identity.Api.IntegrationTests/Identity.Api.IntegrationTests.csproj" />
     <Project Path="tests/Services/Identity/Identity.Api.UnitTests/Identity.Api.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tests/Services/Notification/">
+    <Project Path="tests/Services/Notification/Notification.Api.IntegrationTests/Notification.Api.IntegrationTests.csproj" />
     <Project Path="tests/Services/Notification/Notification.Api.UnitTests/Notification.Api.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tests/Services/Ordering/">
+    <Project Path="tests/Services/Ordering/Ordering.Api.IntegrationTests/Ordering.Api.IntegrationTests.csproj" />
     <Project Path="tests/Services/Ordering/Ordering.Api.UnitTests/Ordering.Api.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tests/Services/Payment/">
+    <Project Path="tests/Services/Payment/Payment.Api.IntegrationTests/Payment.Api.IntegrationTests.csproj" />
     <Project Path="tests/Services/Payment/Payment.Api.UnitTests/Payment.Api.UnitTests.csproj" />
   </Folder>
 </Solution>

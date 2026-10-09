@@ -187,3 +187,6 @@ finally
     Log.Information("Shutting down Identity.Api.");
     Log.CloseAndFlush();
 }
+
+// Makes Program visible to WebApplicationFactory<Program> in integration tests.
+public partial class Program;
