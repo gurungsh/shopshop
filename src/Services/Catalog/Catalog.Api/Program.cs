@@ -183,3 +183,6 @@ finally
     Log.Information("Shutting down Catalog.Api");
     Log.CloseAndFlush();
 }
+
+// Makes Program visible to WebApplicationFactory<Program> in integration tests.
+public partial class Program;

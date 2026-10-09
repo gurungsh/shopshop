@@ -105,3 +105,7 @@ finally
     Log.Information("Shutting down Payment.Api.");
     Log.CloseAndFlush();
 }
+
+
+// Makes Program visible to WebApplicationFactory<Program> in integration tests.
+public partial class Program;
