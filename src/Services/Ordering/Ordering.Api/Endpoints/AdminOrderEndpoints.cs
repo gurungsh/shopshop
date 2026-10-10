@@ -27,6 +27,7 @@ public static class AdminOrderEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("AdminSearchOrders")
+        .Produces<PagedResponse<OrderResponse>>()
         .AddEndpointFilter<ValidationFilter<OrderQuery>>();
 
         // GET /api/admin/orders/{id}
@@ -40,7 +41,8 @@ public static class AdminOrderEndpoints
                 ? Results.Ok(result.Value)
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("AdminGetOrder");
+        .WithName("AdminGetOrder")
+        .Produces<OrderDetailResponse>();
 
         // PUT /api/admin/orders/{id}/status
         group.MapPut("/{id:guid}/status", async (
@@ -55,6 +57,7 @@ public static class AdminOrderEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("AdminUpdateOrder")
+        .Produces<OrderDetailResponse>()
         .AddEndpointFilter<ValidationFilter<AdminUpdateOrderRequest>>();
 
         // POST /api/admin/orders/{id}/cancel
@@ -68,7 +71,8 @@ public static class AdminOrderEndpoints
                 ? Results.Ok(result.Value)
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("AdminCancelOrder");
+        .WithName("AdminCancelOrder")
+        .Produces<OrderDetailResponse>();
 
         return app;
     }

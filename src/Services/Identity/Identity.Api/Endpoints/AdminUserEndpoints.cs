@@ -27,6 +27,7 @@ public static class AdminUserEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("GetUsers")
+        .Produces<PagedResponse<UserResponse>>()
         .AddEndpointFilter<ValidationFilter<UserQuery>>();
 
         // GET /api/admin/users/{id}
@@ -40,7 +41,8 @@ public static class AdminUserEndpoints
                 ? Results.Ok(result.Value)
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("GetUser");
+        .WithName("GetUser")
+        .Produces<UserResponse>();
 
         // POST /api/admin/users
         group.MapPost("", async (
@@ -56,6 +58,7 @@ public static class AdminUserEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("CreateUser")
+        .Produces<UserResponse>(StatusCodes.Status201Created)
         .AddEndpointFilter<ValidationFilter<AdminCreateUserRequest>>();
 
         // PUT /api/admin/users/{id}
@@ -73,6 +76,7 @@ public static class AdminUserEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("UpdateUser")
+        .Produces<UserResponse>()
         .AddEndpointFilter<ValidationFilter<AdminUpdateUserRequest>>();
 
         // DELETE /api/admin/users/{id}
@@ -86,7 +90,8 @@ public static class AdminUserEndpoints
                 ? Results.NoContent()
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("DeleteUser");
+        .WithName("DeleteUser")
+        .Produces(StatusCodes.Status204NoContent);
 
         return app;
     }

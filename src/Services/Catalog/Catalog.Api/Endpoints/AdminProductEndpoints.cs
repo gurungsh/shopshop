@@ -30,6 +30,7 @@ public static class AdminProductEndpoints
 
         })
         .WithName("CreateProduct")
+        .Produces<ProductResponse>(StatusCodes.Status201Created)
         .AddEndpointFilter<ValidationFilter<AdminCreateProductRequest>>();
 
         // PUT /api/admin/products/{id}
@@ -46,6 +47,7 @@ public static class AdminProductEndpoints
 
         })
         .WithName("UpdateProduct")
+        .Produces<ProductResponse>()
         .AddEndpointFilter<ValidationFilter<AdminUpdateProductRequest>>();
 
         // DELETE /api/admin/products/{id}
@@ -59,7 +61,8 @@ public static class AdminProductEndpoints
                 ? Results.NoContent()
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("DeleteProduct");
+        .WithName("DeleteProduct")
+        .Produces(StatusCodes.Status204NoContent);
 
         return app;
     }

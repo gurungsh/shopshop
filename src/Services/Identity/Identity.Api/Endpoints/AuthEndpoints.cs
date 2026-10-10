@@ -23,6 +23,7 @@ public static class AuthEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("Register")
+        .Produces<AuthResponse>(StatusCodes.Status201Created)
         .AddEndpointFilter<ValidationFilter<RegisterRequest>>();
 
         // POST /api/auth/login
@@ -35,6 +36,7 @@ public static class AuthEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("Login")
+        .Produces<AuthResponse>()
         .AddEndpointFilter<ValidationFilter<LoginRequest>>();
 
         // POST /api/auth/refresh
@@ -47,6 +49,7 @@ public static class AuthEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("RefreshToken")
+        .Produces<AuthResponse>()
         .AddEndpointFilter<ValidationFilter<RefreshTokenRequest>>();
 
         // POST /api/auth/logout
@@ -59,6 +62,7 @@ public static class AuthEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("Logout")
+        .Produces<bool>()
         .RequireAuthorization();
 
         return app;

@@ -30,6 +30,7 @@ public static class AdminCategoryEndpoints
 
         })
         .WithName("CreateCategory")
+        .Produces<CategoryResponse>(StatusCodes.Status201Created)
         .AddEndpointFilter<ValidationFilter<AdminCreateCategoryRequest>>();
 
         // PUT /api/admin/categories/{id}
@@ -46,6 +47,7 @@ public static class AdminCategoryEndpoints
 
         })
         .WithName("UpdateCategory")
+        .Produces<CategoryResponse>()
         .AddEndpointFilter<ValidationFilter<AdminUpdateCategoryRequest>>();
 
         // DELETE /api/admin/categories/{id}
@@ -59,7 +61,8 @@ public static class AdminCategoryEndpoints
                 ? Results.NoContent()
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("DeleteCategory");
+        .WithName("DeleteCategory")
+        .Produces(StatusCodes.Status204NoContent);
 
         return app;
     }

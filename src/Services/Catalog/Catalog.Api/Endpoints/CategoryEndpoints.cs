@@ -1,4 +1,5 @@
-﻿using BuildingBlocks.Web;
+﻿using BuildingBlocks.Core;
+using BuildingBlocks.Web;
 using Catalog.Api.DTOs;
 using Catalog.Api.Filters;
 using Catalog.Api.Services;
@@ -25,6 +26,7 @@ public static class CategoryEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("GetCategories")
+        .Produces<PagedResponse<CategoryResponse>>()
         .AddEndpointFilter<ValidationFilter<CategoryQuery>>();
 
         // GET /api/categories/{id}
@@ -38,7 +40,8 @@ public static class CategoryEndpoints
                 ? Results.Ok(result.Value)
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("GetCategory");
+        .WithName("GetCategory")
+        .Produces<CategoryResponse>();
 
         return app;
     }

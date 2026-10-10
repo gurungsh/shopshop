@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using BuildingBlocks.Core;
 using BuildingBlocks.Web;
 using Ordering.Api.DTOs;
 using Ordering.Api.Extensions;
@@ -32,6 +33,7 @@ public static class OrderEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("CreateOrder")
+        .Produces<CreateOrderResponse>(StatusCodes.Status201Created)
         .AddEndpointFilter<ValidationFilter<CreateOrderRequest>>();
 
         // POST /api/orders/search
@@ -48,6 +50,7 @@ public static class OrderEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("GetOrders")
+        .Produces<PagedResponse<OrderResponse>>()
         .AddEndpointFilter<ValidationFilter<OrderQuery>>();
 
         // GET /api/orders/{id}
@@ -63,7 +66,8 @@ public static class OrderEndpoints
                 ? Results.Ok(result.Value)
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("GetOrder");
+        .WithName("GetOrder")
+        .Produces<OrderDetailResponse>();
 
         // POST /api/orders/{id}/cancel
         group.MapPost("/{id:guid}/cancel", async (
@@ -78,7 +82,8 @@ public static class OrderEndpoints
                 ? Results.Ok(result.Value)
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("CancelOrder");
+        .WithName("CancelOrder")
+        .Produces<OrderDetailResponse>();
 
         // POST /api/orders/{id}/retry-payment
         group.MapPost("/{id:guid}/retry-payment", async (
@@ -95,6 +100,7 @@ public static class OrderEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("RetryOrderPayment")
+        .Produces<OrderDetailResponse>()
         .AddEndpointFilter<ValidationFilter<RetryOrderPaymentRequest>>();
 
         return app;

@@ -104,6 +104,9 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>
     {
+        options.SupportNonNullableReferenceTypes();
+        options.NonNullableReferenceTypesAsRequired();
+
         options.SwaggerDoc("v1", new OpenApiInfo
         {
             Title = "Identity API",

@@ -15,7 +15,8 @@ public static class JwksEndpoints
         // GET /.well-known/jwks.json
         group.MapGet("/jwks.json", (IJwtKeyProvider jwtKeyProvider) =>
             Results.Ok(jwtKeyProvider.GetJwks()))
-        .WithName("GetJwks");
+        .WithName("GetJwks")
+        .Produces<JwksResponse>();
 
         // GET /.well-known/openid-configuration
         group.MapGet("/openid-configuration", (IOptions<JwtOptions> jwtOptions, HttpContext context) =>
@@ -25,7 +26,8 @@ public static class JwksEndpoints
 
             return Results.Ok(new OpenIdConfigurationResponse(jwtOptions.Value.Issuer, jwksUri));
         })
-        .WithName("GetOpenIdConfiguration");
+        .WithName("GetOpenIdConfiguration")
+        .Produces<OpenIdConfigurationResponse>();
 
         return app;
     }

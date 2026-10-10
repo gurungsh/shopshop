@@ -26,7 +26,8 @@ public static class UserEndpoints
                 ? Results.Ok(result.Value)
                 : EndpointResults.ToHttpResult(result);
         })
-        .WithName("GetCurrentUser");
+        .WithName("GetCurrentUser")
+        .Produces<UserResponse>();
 
         // PUT /api/users/me
         group.MapPut("/me", async (
@@ -43,6 +44,7 @@ public static class UserEndpoints
                 : EndpointResults.ToHttpResult(result);
         })
         .WithName("UpdateCurrentUser")
+        .Produces<UserResponse>()
         .AddEndpointFilter<ValidationFilter<UpdateCurrentUserRequest>>();
 
         return app;
