@@ -19,6 +19,8 @@ integration ─► WebApplicationFactory ──► real service
 
 All integration tests need Docker. Unit tests (`tests/**/*.UnitTests`) do not.
 
+The InMemory provider cannot run Npgsql-specific functions such as `EF.Functions.ILike`, so Catalog's text-search filters and the case-insensitive unique indexes are tested only in the integration tests.
+
 ## How it works
 
 - Testcontainers starts throwaway containers on random ports, so nothing clashes with `docker compose`. They are removed when the tests finish.

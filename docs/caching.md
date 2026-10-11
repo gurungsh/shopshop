@@ -19,6 +19,8 @@ flowchart LR
 | `POST /api/products/search` | `catalog:products:search:{version}:{query hash}` | `Cache:SearchTtlMinutes` (2) |
 | `POST /api/categories/search` | `catalog:categories:search:{version}:{query hash}` | `Cache:SearchTtlMinutes` (2) |
 
+Search keys are built after normalizing `name` and `description` (trimmed, lowercase) and `sku` (trimmed, uppercase), so queries that differ only in case or spacing share one entry.
+
 Not cached: not-found results, Ordering, Identity, Payment, Notification and the Gateway. Their data is per user, changes with events, or must always be fresh. Ordering benefits anyway, because its price lookup goes through Catalog's cached search.
 
 ## Invalidation

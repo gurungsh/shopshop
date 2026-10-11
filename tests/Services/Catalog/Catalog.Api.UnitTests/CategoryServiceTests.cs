@@ -1,4 +1,4 @@
-using BuildingBlocks.Core;
+﻿using BuildingBlocks.Core;
 using Catalog.Api.Cacheing;
 using Catalog.Api.Caching;
 using Catalog.Api.DTOs;
@@ -57,71 +57,6 @@ public class CategoryServiceTests
         Assert.Equal(2, result.Value.Items.Count);
     }
 
-    [Theory]
-    [InlineData("Electronics", 1)]
-    [InlineData("Nonexistent", 0)]
-    public async Task GetCategoriesAsync_WithNameFilter_ShouldReturnMatchingCategories(string name, int expectedCount)
-    {
-        // Arrange
-        _dbContext.Categories.AddRange(
-            new Category { Name = "Electronics", Description = "Gadgets" },
-            new Category { Name = "Books", Description = "Reading material" });
-        await _dbContext.SaveChangesAsync();
-
-        var query = new CategoryQuery(Name: name);
-
-        // Act
-        var result = await _categoryService.GetCategoriesAsync(query);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal(expectedCount, result.Value.Items.Count);
-        Assert.All(result.Value.Items, c => Assert.Equal(name, c.Name));
-    }
-
-    [Fact]
-    public async Task GetCategoriesAsync_WithDescriptionFilter_ShouldReturnCategoriesContainingText()
-    {
-        // Arrange
-        _dbContext.Categories.AddRange(
-            new Category { Name = "Electronics", Description = "Cool gadgets and devices" },
-            new Category { Name = "Books", Description = "Reading material" });
-        await _dbContext.SaveChangesAsync();
-
-        var query = new CategoryQuery(Description: "gadgets");
-
-        // Act
-        var result = await _categoryService.GetCategoriesAsync(query);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Single(result.Value.Items);
-        Assert.Equal("Electronics", result.Value.Items[0].Name);
-    }
-
-    [Fact]
-    public async Task GetCategoriesAsync_WithNameAndDescriptionFilters_ShouldReturnCategoriesMatchingBoth()
-    {
-        // Arrange
-        _dbContext.Categories.AddRange(
-            new Category { Name = "Electronics", Description = "Cool gadgets" },
-            new Category { Name = "Electronics", Description = "Something else" },
-            new Category { Name = "Books", Description = "Cool gadgets" });
-        await _dbContext.SaveChangesAsync();
-
-        var query = new CategoryQuery(Name: "Electronics", Description: "gadgets");
-
-        // Act
-        var result = await _categoryService.GetCategoriesAsync(query);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Single(result.Value.Items);
-    }
-
     [Fact]
     public async Task GetCategoriesAsync_WithMatchingIdsFilter_ShouldReturnOnlySpecifiedCategories()
     {
@@ -143,28 +78,6 @@ public class CategoryServiceTests
         Assert.Equal(2, result.Value.Items.Count);
         Assert.Contains(result.Value.Items, c => c.Id == category1.Id);
         Assert.Contains(result.Value.Items, c => c.Id == category3.Id);
-    }
-
-    [Fact]
-    public async Task GetCategoriesAsync_WithIdsAndNameFilters_ShouldReturnCategoriesMatchingBoth()
-    {
-        // Arrange
-        var category1 = new Category { Name = "Electronics", Description = "Gadgets" };
-        var category2 = new Category { Name = "Books", Description = "Reading material" };
-        var category3 = new Category { Name = "Electronics", Description = "Other gadgets" };
-        _dbContext.Categories.AddRange(category1, category2, category3);
-        await _dbContext.SaveChangesAsync();
-
-        var query = new CategoryQuery(Ids: [category1.Id, category2.Id], Name: "Electronics");
-
-        // Act
-        var result = await _categoryService.GetCategoriesAsync(query);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Single(result.Value.Items);
-        Assert.Equal(category1.Id, result.Value.Items[0].Id);
     }
 
     [Theory]
@@ -302,6 +215,23 @@ public class CategoryServiceTests
         Assert.Equal(string.Empty, result.Value.Description);
     }
 
+
+    [Fact]
+    public async Task CreateCategoryAsync_WithNameDifferingOnlyByCase_ShouldReturnConflictError()
+    {
+        // Arrange
+        _dbContext.Categories.Add(new Category { Name = "Shoes" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _categoryService.CreateCategoryAsync(new AdminCreateCategoryRequest("shoes"));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
+        _cache.Verify(c => c.BumpVersionAsync(), Times.Never);
+    }
+
     #endregion
 
     #region UpdateCategoryAsync Tests
@@ -386,6 +316,40 @@ public class CategoryServiceTests
 
         _cache.Verify(c => c.RemoveAsync(It.IsAny<string>()), Times.Never);
         _cache.Verify(c => c.BumpVersionAsync(), Times.Never);
+    }
+
+
+    [Fact]
+    public async Task UpdateCategoryAsync_WithNameTakenByAnotherCategoryInDifferentCase_ShouldReturnConflictError()
+    {
+        // Arrange
+        var category = new Category { Name = "Books" };
+        _dbContext.Categories.AddRange(category, new Category { Name = "Shoes" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _categoryService.UpdateCategoryAsync(category.Id, new AdminUpdateCategoryRequest(Name: "SHOES"));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
+        _cache.Verify(c => c.BumpVersionAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateCategoryAsync_WithOwnNameInDifferentCase_ShouldSucceed()
+    {
+        // Arrange
+        var category = new Category { Name = "Books" };
+        _dbContext.Categories.Add(category);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _categoryService.UpdateCategoryAsync(category.Id, new AdminUpdateCategoryRequest(Name: "BOOKS"));
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal("BOOKS", result.Value!.Name);
     }
 
     #endregion

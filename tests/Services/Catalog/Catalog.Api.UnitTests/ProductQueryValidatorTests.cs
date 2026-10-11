@@ -1,4 +1,4 @@
-using Catalog.Api.DTOs;
+﻿using Catalog.Api.DTOs;
 using Catalog.Api.Validators;
 
 namespace Catalog.Api.UnitTests;
@@ -34,6 +34,27 @@ public class ProductQueryValidatorTests
         // Assert
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.PropertyName == invalidProperty);
+    }
+
+    [Fact]
+    public void Validate_WithMaxPriceBelowMinPrice_ShouldBeInvalid()
+    {
+        // Act
+        var result = _validator.Validate(new ProductQuery(MinPrice: 50m, MaxPrice: 10m));
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == nameof(ProductQuery.MaxPrice));
+    }
+
+    [Fact]
+    public void Validate_WithEqualMinAndMaxPrice_ShouldBeValid()
+    {
+        // Act
+        var result = _validator.Validate(new ProductQuery(MinPrice: 10m, MaxPrice: 10m));
+
+        // Assert
+        Assert.True(result.IsValid);
     }
 
     #endregion

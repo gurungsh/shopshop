@@ -34,6 +34,13 @@ GET    /.well-known/jwks.json                (public key, anonymous)
 GET    /.well-known/openid-configuration     (discovery document, anonymous)
 ```
 
+Identity rules:
+
+| Topic | Rule |
+|---|---|
+| Email | Trimmed and stored in lowercase, so `Bob@X.com` and `bob@x.com` are the same user. The admin `email` search filter is an exact match after the same normalization. |
+| Duplicates | Registering, creating a user, or changing an email to one that is already taken gets 409, including when two requests race. |
+
 ## Catalog
 
 What can be purchased: products and categories.
@@ -53,6 +60,17 @@ POST   /api/admin/categories
 PUT    /api/admin/categories/{id}
 DELETE /api/admin/categories/{id}
 ```
+
+Catalog rules:
+
+| Topic | Rule |
+|---|---|
+| Text search | `name` and `description` filters match any part of the text and ignore case. `%` and `_` are matched literally. |
+| SKU | Trimmed and stored in uppercase. The `sku` filter is an exact match after the same normalization, so `abc-1` finds `ABC-1`. |
+| Unique values | Category names (ignoring case) and SKUs must be unique. A duplicate gets 409, including when two requests race. |
+| Categories | Creating a product in a category that does not exist gets 400. |
+| Price range | `maxPrice` below `minPrice` gets 400. |
+| Updates | A field left out (`null`) is unchanged. An empty `description` clears it. Sending a product's own SKU back is allowed. |
 
 ## Ordering
 
@@ -81,6 +99,7 @@ Order rules:
 | Retries | A `PaymentFailed` order can be retried with `POST /api/orders/{id}/retry-payment` and a new `paymentMethodId`, up to `Payment:MaxRetries` times (default 3, so 4 attempts in total). If the last retry fails, the order becomes `Failed`. |
 | Cancelling | Customers can cancel only `Pending`, `Confirmed`, `Processing` or `PaymentFailed` orders; otherwise they get 409. Admins can set any status. |
 | Cancel event | `order.cancelled` is sent only when an order actually changes to `Cancelled`. |
+| Search ranges | A search with an inverted range (`maxTotalAmount` below `minTotalAmount`, `maxItemCount` below `minItemCount`, or an "after" date later than its "before" date) gets 400. |
 | Stale results | A payment result for an older attempt, or for an order that is no longer `Pending`, is ignored. |
 
 See the [payment flow](architecture.md#payment-flow) for the diagram.

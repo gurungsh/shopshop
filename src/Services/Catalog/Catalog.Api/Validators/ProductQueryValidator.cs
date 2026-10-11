@@ -14,5 +14,10 @@ public sealed class ProductQueryValidator : AbstractValidator<ProductQuery>
         RuleFor(x => x.PageSize)
             .InclusiveBetween(1, PagingDefaults.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {PagingDefaults.MaxPageSize}.");
+
+        RuleFor(x => x.MaxPrice)
+            .GreaterThanOrEqualTo(x => x.MinPrice)
+            .When(x => x.MinPrice.HasValue && x.MaxPrice.HasValue)
+            .WithMessage("MaxPrice must be greater than or equal to MinPrice.");
     }
 }

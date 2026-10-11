@@ -31,12 +31,16 @@ public class ProductService : IProductService
 
     public async Task<Result<PagedResponse<ProductResponse>>> GetProductsAsync(ProductQuery query)
     {
+        query = query with { Sku = query.Sku?.Trim().ToUpperInvariant() };
+
         var version = await _cache.GetVersionAsync();
         string? cacheKey = null;
 
         if (version is not null)
         {
-            cacheKey = CatalogCacheKeys.ProductSearch(version, query);
+            cacheKey = CatalogCacheKeys.ProductSearch(
+                version,
+                query with { Name = query.Name?.Trim().ToLowerInvariant(), Description = query.Description?.Trim().ToLowerInvariant() });
             var cached = await _cache.GetAsync<PagedResponse<ProductResponse>>(cacheKey);
             if (cached is not null)
             {
@@ -58,12 +62,12 @@ public class ProductService : IProductService
 
         if (!string.IsNullOrWhiteSpace(query.Name))
         {
-            products = products.Where(p => p.Name.Contains(query.Name));
+            products = products.Where(p => EF.Functions.ILike(p.Name, LikePattern.Contains(query.Name), LikePattern.Escape));
         }
 
         if (!string.IsNullOrWhiteSpace(query.Description))
         {
-            products = products.Where(p => p.Description.Contains(query.Description));
+            products = products.Where(p => EF.Functions.ILike(p.Description, LikePattern.Contains(query.Description), LikePattern.Escape));
         }
 
         if (!string.IsNullOrWhiteSpace(query.Sku))
@@ -148,18 +152,37 @@ public class ProductService : IProductService
 
     public async Task<Result<ProductResponse>> CreateProductAsync(AdminCreateProductRequest request)
     {
+        if (!await _dbContext.Categories.AnyAsync(c => c.Id == request.CategoryId))
+        {
+            return Result<ProductResponse>.Failure("Category does not exist.", ResultErrorType.BadRequest);
+        }
+
+        var sku = request.Sku.Trim().ToUpperInvariant();
+
+        if (await _dbContext.Products.AnyAsync(p => p.Sku == sku))
+        {
+            return Result<ProductResponse>.Failure("A Product with this SKU already exists.", ResultErrorType.Conflict);
+        }
+
         var product = new Product
         {
             CategoryId = request.CategoryId,
             Name = request.Name,
             Description = request.Description,
-            Sku = request.Sku,
+            Sku = sku,
             Price = request.Price,
             IsActive = true
         };
 
         _dbContext.Add(product);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<ProductResponse>.Failure("A Product with this SKU already exists.", ResultErrorType.Conflict);
+        }
         await _cache.BumpVersionAsync();
 
         _logger.LogInformation("Product created. Product Id:{ProductId}, Name:{Name}", product.Id, product.Name);
@@ -204,21 +227,22 @@ public class ProductService : IProductService
             product.Name = request.Name;
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Description))
+        if (request.Description is not null)
         {
             product.Description = request.Description;
         }
 
         if (!string.IsNullOrWhiteSpace(request.Sku))
         {
+            var sku = request.Sku.Trim().ToUpperInvariant();
             var skuExists = await _dbContext.Products
-                .AnyAsync(p => p.Sku == request.Sku);
+                .AnyAsync(p => p.Sku == sku && p.Id != id);
             if (skuExists)
             {
                 return Result<ProductResponse>.Failure("A Product with this SKU already exists.", ResultErrorType.Conflict);
             }
 
-            product.Sku = request.Sku;
+            product.Sku = sku;
         }
 
         if (request.Price.HasValue)
@@ -233,11 +257,18 @@ public class ProductService : IProductService
 
         product.UpdatedAtUtc = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<ProductResponse>.Failure("A Product with this SKU already exists.", ResultErrorType.Conflict);
+        }
         await _cache.RemoveAsync(CatalogCacheKeys.Product(product.Id));
         await _cache.BumpVersionAsync();
 
-        _logger.LogInformation("Product updated. Category Id:{ProductId}", product.Id);
+        _logger.LogInformation("Product updated. Product Id:{ProductId}", product.Id);
 
         return Result<ProductResponse>.Success(new ProductResponse(
             product.Id,

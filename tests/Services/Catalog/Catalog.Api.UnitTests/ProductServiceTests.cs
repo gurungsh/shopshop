@@ -1,4 +1,4 @@
-using BuildingBlocks.Core;
+﻿using BuildingBlocks.Core;
 using Catalog.Api.Cacheing;
 using Catalog.Api.Caching;
 using Catalog.Api.DTOs;
@@ -52,6 +52,14 @@ public class ProductServiceTests
             Price = price,
             IsActive = isActive
         };
+    }
+
+    private async Task<Guid> SeedCategoryAsync()
+    {
+        var category = new Category { Name = $"Category {Guid.NewGuid():N}" };
+        _dbContext.Categories.Add(category);
+        await _dbContext.SaveChangesAsync();
+        return category.Id;
     }
 
     #region GetProductsAsync Tests
@@ -123,51 +131,6 @@ public class ProductServiceTests
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value);
         Assert.Equal(2, result.Value.Items.Count);
-    }
-
-    [Theory]
-    [InlineData("Shoe", 1)]
-    [InlineData("Nonexistent", 0)]
-    public async Task GetProductsAsync_WithNameFilter_ShouldReturnProductsContainingText(string name, int expectedCount)
-    {
-        // Arrange
-        var categoryId = Guid.NewGuid();
-        _dbContext.Products.AddRange(
-            CreateTestProduct(categoryId, name: "Running Shoe", sku: "SKU-001"),
-            CreateTestProduct(categoryId, name: "Hiking Boot", sku: "SKU-002"));
-        await _dbContext.SaveChangesAsync();
-
-        var query = new ProductQuery(Name: name);
-
-        // Act
-        var result = await _productService.GetProductsAsync(query);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal(expectedCount, result.Value.Items.Count);
-        Assert.All(result.Value.Items, p => Assert.Contains(name, p.Name));
-    }
-
-    [Fact]
-    public async Task GetProductsAsync_WithDescriptionFilter_ShouldReturnProductsContainingText()
-    {
-        // Arrange
-        var categoryId = Guid.NewGuid();
-        _dbContext.Products.AddRange(
-            CreateTestProduct(categoryId, description: "Comfortable and lightweight", sku: "SKU-001"),
-            CreateTestProduct(categoryId, description: "Heavy duty", sku: "SKU-002"));
-        await _dbContext.SaveChangesAsync();
-
-        var query = new ProductQuery(Description: "lightweight");
-
-        // Act
-        var result = await _productService.GetProductsAsync(query);
-
-        // Assert
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Single(result.Value.Items);
     }
 
     [Fact]
@@ -320,6 +283,8 @@ public class ProductServiceTests
     {
         // Arrange
         var categoryId = Guid.NewGuid();
+        _dbContext.Categories.Add(new Category { Id = categoryId, Name = "Footwear" });
+        await _dbContext.SaveChangesAsync();
         var request = new AdminCreateProductRequest(
             categoryId, "Running Shoe", "Comfortable running shoe", "SKU-001", 49.99m);
         var beforeCreate = DateTime.UtcNow;
@@ -346,6 +311,53 @@ public class ProductServiceTests
         Assert.Equal("Running Shoe", createdProduct.Name);
 
         _cache.Verify(c => c.BumpVersionAsync(), Times.Once);
+    }
+
+
+    [Fact]
+    public async Task CreateProductAsync_WithMixedCaseSku_ShouldStoreSkuTrimmedAndUppercase()
+    {
+        // Arrange
+        var categoryId = await SeedCategoryAsync();
+
+        // Act
+        var result = await _productService.CreateProductAsync(
+            new AdminCreateProductRequest(categoryId, "Running Shoe", "Desc", "  abc-1 ", 10m));
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal("ABC-1", result.Value!.Sku);
+    }
+
+    [Fact]
+    public async Task CreateProductAsync_WithSkuDifferingOnlyByCase_ShouldReturnConflictError()
+    {
+        // Arrange
+        var categoryId = await SeedCategoryAsync();
+        _dbContext.Products.Add(CreateTestProduct(categoryId, sku: "ABC-1"));
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _productService.CreateProductAsync(
+            new AdminCreateProductRequest(categoryId, "Other", "Desc", "abc-1", 10m));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
+        _cache.Verify(c => c.BumpVersionAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateProductAsync_WithNonexistentCategory_ShouldReturnBadRequestError()
+    {
+        // Act
+        var result = await _productService.CreateProductAsync(
+            new AdminCreateProductRequest(Guid.NewGuid(), "Running Shoe", "Desc", "SKU-001", 10m));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.BadRequest, result.ErrorType);
+        Assert.Empty(_dbContext.Products);
     }
 
     #endregion
@@ -476,6 +488,59 @@ public class ProductServiceTests
         Assert.Equal(ResultErrorType.NotFound, result.ErrorType);
     }
 
+
+    [Fact]
+    public async Task UpdateProductAsync_WithItsOwnSku_ShouldSucceed()
+    {
+        // Arrange
+        var product = CreateTestProduct(Guid.NewGuid(), sku: "SKU-001");
+        _dbContext.Products.Add(product);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _productService.UpdateProductAsync(
+            product.Id, new AdminUpdateProductRequest(Sku: "sku-001", Price: 5m));
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal("SKU-001", result.Value!.Sku);
+    }
+
+    [Fact]
+    public async Task UpdateProductAsync_WithSkuTakenByAnotherProductInDifferentCase_ShouldReturnConflictError()
+    {
+        // Arrange
+        var categoryId = Guid.NewGuid();
+        var product = CreateTestProduct(categoryId, sku: "SKU-001");
+        _dbContext.Products.AddRange(product, CreateTestProduct(categoryId, sku: "SKU-002"));
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _productService.UpdateProductAsync(
+            product.Id, new AdminUpdateProductRequest(Sku: "sku-002"));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
+    }
+
+    [Fact]
+    public async Task UpdateProductAsync_WithEmptyDescription_ShouldClearDescription()
+    {
+        // Arrange
+        var product = CreateTestProduct(Guid.NewGuid(), description: "Something");
+        _dbContext.Products.Add(product);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _productService.UpdateProductAsync(
+            product.Id, new AdminUpdateProductRequest(Description: ""));
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal("", result.Value!.Description);
+    }
+
     #endregion
 
     #region DeleteProductAsync Tests
@@ -553,6 +618,39 @@ public class ProductServiceTests
 
         // Assert
         Assert.True(result.IsSuccess);
+        Assert.Single(result.Value!.Items);
+    }
+
+    [Fact]
+    public async Task GetProductsAsync_WithNameDifferingOnlyByCaseAndWhitespace_ShouldUseSameCacheKey()
+    {
+        // Arrange
+        var keys = new List<string>();
+        _cache.Setup(c => c.GetVersionAsync()).ReturnsAsync("v1");
+        _cache.Setup(c => c.GetAsync<PagedResponse<ProductResponse>>(It.IsAny<string>()))
+            .Callback<string>(keys.Add)
+            .ReturnsAsync(new PagedResponse<ProductResponse>([], 1, 20, 0));
+
+        // Act
+        await _productService.GetProductsAsync(new ProductQuery(Name: "Shoe"));
+        await _productService.GetProductsAsync(new ProductQuery(Name: " shoe "));
+
+        // Assert
+        Assert.Equal(2, keys.Count);
+        Assert.Equal(keys[0], keys[1]);
+    }
+
+    [Fact]
+    public async Task GetProductsAsync_WithLowercaseSku_ShouldMatchUppercaseStoredSku()
+    {
+        // Arrange
+        _dbContext.Products.Add(CreateTestProduct(Guid.NewGuid(), sku: "ABC-1"));
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _productService.GetProductsAsync(new ProductQuery(Sku: " abc-1 "));
+
+        // Assert
         Assert.Single(result.Value!.Items);
     }
 

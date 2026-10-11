@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -89,6 +89,23 @@ public class IdentityApiTests(IdentityApiFactory factory)
 
         // Assert
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_ConcurrentlyWithSameEmail_ShouldCreateOneAndConflictTheOther()
+    {
+        // Arrange
+        var email = NewEmail();
+
+        // Act
+        var responses = await Task.WhenAll(
+            _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, Password)),
+            _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email.ToUpperInvariant(), Password)));
+
+        // Assert
+        var codes = responses.Select(r => r.StatusCode).ToList();
+        Assert.Single(codes, c => c == HttpStatusCode.Conflict);
+        Assert.Single(codes, c => (int)c is >= 200 and < 300);
     }
 
     [Fact]
@@ -233,6 +250,90 @@ public class IdentityApiTests(IdentityApiFactory factory)
         var doc = JsonDocument.Parse(json).RootElement;
         Assert.Equal(IdentityApiFactory.Issuer, doc.GetProperty("issuer").GetString());
         Assert.EndsWith("/.well-known/jwks.json", doc.GetProperty("jwks_uri").GetString());
+    }
+
+    #endregion
+
+    #region Duplicate Email Tests
+
+    private static void AssertOneSuccessOneConflict(IEnumerable<HttpResponseMessage> responses)
+    {
+        var codes = responses.Select(r => r.StatusCode).ToList();
+        Assert.Single(codes, c => c == HttpStatusCode.Conflict);
+        Assert.Single(codes, c => (int)c is >= 200 and < 300);
+    }
+
+    [Fact]
+    public async Task AdminCreateUser_ConcurrentlyWithSameEmail_ShouldCreateOneAndConflictTheOther()
+    {
+        // Arrange
+        var token = await CreateAdminTokenAsync();
+        var email = NewEmail();
+
+        // Act
+        var responses = await Task.WhenAll(
+            _client.SendAsync(Authorized(HttpMethod.Post, "/api/admin/users", token,
+                new AdminCreateUserRequest(email, Password, Roles.Customer))),
+            _client.SendAsync(Authorized(HttpMethod.Post, "/api/admin/users", token,
+                new AdminCreateUserRequest(email.ToUpperInvariant(), Password, Roles.Customer))));
+
+        // Assert
+        AssertOneSuccessOneConflict(responses);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUser_WithEmailTakenByAnotherUser_ShouldReturnConflict()
+    {
+        // Arrange
+        var token = await CreateAdminTokenAsync();
+        var taken = await RegisterAsync();
+        var user = await RegisterAsync();
+
+        // Act
+        var response = await _client.SendAsync(Authorized(HttpMethod.Put, $"/api/admin/users/{user.Id}", token,
+            new AdminUpdateUserRequest(taken.Email.ToUpperInvariant(), Roles.Customer)));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUser_ConcurrentlyToSameEmail_ShouldUpdateOneAndConflictTheOther()
+    {
+        // Arrange
+        var token = await CreateAdminTokenAsync();
+        var first = await RegisterAsync();
+        var second = await RegisterAsync();
+        var email = NewEmail();
+
+        // Act
+        var responses = await Task.WhenAll(
+            _client.SendAsync(Authorized(HttpMethod.Put, $"/api/admin/users/{first.Id}", token,
+                new AdminUpdateUserRequest(email, Roles.Customer))),
+            _client.SendAsync(Authorized(HttpMethod.Put, $"/api/admin/users/{second.Id}", token,
+                new AdminUpdateUserRequest(email, Roles.Customer))));
+
+        // Assert
+        AssertOneSuccessOneConflict(responses);
+    }
+
+    [Fact]
+    public async Task UpdateCurrentUser_ConcurrentlyToSameEmail_ShouldUpdateOneAndConflictTheOther()
+    {
+        // Arrange
+        var first = await RegisterAsync();
+        var second = await RegisterAsync();
+        var email = NewEmail();
+
+        // Act
+        var responses = await Task.WhenAll(
+            _client.SendAsync(Authorized(HttpMethod.Put, "/api/users/me", first.Token,
+                new UpdateCurrentUserRequest(email, Password))),
+            _client.SendAsync(Authorized(HttpMethod.Put, "/api/users/me", second.Token,
+                new UpdateCurrentUserRequest(email, Password))));
+
+        // Assert
+        AssertOneSuccessOneConflict(responses);
     }
 
     #endregion
