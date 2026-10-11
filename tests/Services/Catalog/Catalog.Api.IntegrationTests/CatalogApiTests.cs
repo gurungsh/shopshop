@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using BuildingBlocks.Core;
@@ -34,12 +34,13 @@ public class CatalogApiTests(CatalogApiFactory factory)
         return (await response.Content.ReadFromJsonAsync<CategoryResponse>())!;
     }
 
-    private async Task<ProductResponse> CreateProductAsync(Guid categoryId, string? name = null, decimal price = 10m)
+    private async Task<ProductResponse> CreateProductAsync(
+        Guid categoryId, string? name = null, decimal price = 10m, string? sku = null, string description = "Desc")
     {
         var response = await _client.SendAsync(Admin(
             HttpMethod.Post, "/api/admin/products",
             new AdminCreateProductRequest(
-                categoryId, name ?? $"Product {Guid.NewGuid():N}", "Desc", $"SKU-{Guid.NewGuid():N}", price)));
+                categoryId, name ?? $"Product {Guid.NewGuid():N}", description, sku ?? $"SKU-{Guid.NewGuid():N}", price)));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<ProductResponse>())!;
     }
@@ -145,6 +146,184 @@ public class CatalogApiTests(CatalogApiFactory factory)
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(2, body.GetProperty("items").GetArrayLength());
         Assert.Equal(3, body.GetProperty("totalCount").GetInt32());
+    }
+
+    #endregion
+
+    #region Search Tests
+
+    private async Task<JsonElement> SearchAsync(string url, object query)
+    {
+        var response = await _client.PostAsJsonAsync(url, query);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    [Fact]
+    public async Task SearchProducts_ByNameInDifferentCase_ShouldMatch()
+    {
+        // Arrange
+        var token = $"Zeta{Guid.NewGuid():N}";
+        var category = await CreateCategoryAsync();
+        await CreateProductAsync(category.Id, name: $"Running {token} Shoe");
+
+        // Act
+        var body = await SearchAsync("/api/products/search", new ProductQuery(Name: token.ToLowerInvariant()));
+
+        // Assert
+        Assert.Equal(1, body.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task SearchProducts_ByDescriptionInDifferentCase_ShouldMatch()
+    {
+        // Arrange
+        var token = $"Lightweight{Guid.NewGuid():N}";
+        var category = await CreateCategoryAsync();
+        await CreateProductAsync(category.Id, description: $"Very {token} build");
+
+        // Act
+        var body = await SearchAsync("/api/products/search", new ProductQuery(Description: token.ToUpperInvariant()));
+
+        // Assert
+        Assert.Equal(1, body.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task SearchProducts_WithPercentInName_ShouldMatchLiterally()
+    {
+        // Arrange
+        var token = Guid.NewGuid().ToString("N");
+        var category = await CreateCategoryAsync();
+        await CreateProductAsync(category.Id, name: $"{token} 50% Off");
+        await CreateProductAsync(category.Id, name: $"{token} 50 Percent");
+
+        // Act
+        var body = await SearchAsync("/api/products/search", new ProductQuery(Name: $"{token} 50%"));
+
+        // Assert
+        Assert.Equal(1, body.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task SearchProducts_BySkuInLowercase_ShouldMatchUppercaseStoredSku()
+    {
+        // Arrange
+        var sku = $"abc-{Guid.NewGuid():N}";
+        var category = await CreateCategoryAsync();
+        var product = await CreateProductAsync(category.Id, sku: sku);
+
+        // Act
+        var body = await SearchAsync("/api/products/search", new ProductQuery(Sku: sku));
+
+        // Assert
+        Assert.Equal(sku.ToUpperInvariant(), product.Sku);
+        Assert.Equal(1, body.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task SearchCategories_ByNameInDifferentCase_ShouldMatch()
+    {
+        // Arrange
+        var token = $"Gadgets{Guid.NewGuid():N}";
+        await CreateCategoryAsync($"{token} & More");
+
+        // Act
+        var body = await SearchAsync("/api/categories/search", new CategoryQuery(Name: token.ToLowerInvariant()));
+
+        // Assert
+        Assert.Equal(1, body.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task SearchProducts_WithMaxPriceBelowMinPrice_ShouldReturnBadRequest()
+    {
+        // Act
+        var response = await _client.PostAsJsonAsync(
+            "/api/products/search", new ProductQuery(MinPrice: 50m, MaxPrice: 10m));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    #endregion
+
+    #region Uniqueness Tests
+
+    [Fact]
+    public async Task CreateCategory_WithNameDifferingOnlyByCase_ShouldReturnConflict()
+    {
+        // Arrange
+        var name = $"Shoes{Guid.NewGuid():N}";
+        await CreateCategoryAsync(name);
+
+        // Act
+        var response = await _client.SendAsync(Admin(
+            HttpMethod.Post, "/api/admin/categories", new AdminCreateCategoryRequest(name.ToUpperInvariant())));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateCategory_ConcurrentlyWithCaseVariants_ShouldCreateOneAndConflictTheOther()
+    {
+        // Arrange
+        var name = $"Race{Guid.NewGuid():N}";
+
+        // Act
+        var responses = await Task.WhenAll(
+            _client.SendAsync(Admin(HttpMethod.Post, "/api/admin/categories", new AdminCreateCategoryRequest(name))),
+            _client.SendAsync(Admin(HttpMethod.Post, "/api/admin/categories", new AdminCreateCategoryRequest(name.ToUpperInvariant()))));
+
+        // Assert
+        var codes = responses.Select(r => r.StatusCode).ToList();
+        Assert.Single(codes, c => c == HttpStatusCode.Conflict);
+        Assert.Single(codes, c => (int)c is >= 200 and < 300);
+    }
+
+    [Fact]
+    public async Task CreateProduct_WithSkuDifferingOnlyByCase_ShouldReturnConflict()
+    {
+        // Arrange
+        var category = await CreateCategoryAsync();
+        var existing = await CreateProductAsync(category.Id);
+
+        // Act
+        var response = await _client.SendAsync(Admin(
+            HttpMethod.Post, "/api/admin/products",
+            new AdminCreateProductRequest(category.Id, "Other", "Desc", existing.Sku.ToLowerInvariant(), 5m)));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateProduct_WithNonexistentCategory_ShouldReturnBadRequest()
+    {
+        // Act
+        var response = await _client.SendAsync(Admin(
+            HttpMethod.Post, "/api/admin/products",
+            new AdminCreateProductRequest(Guid.NewGuid(), "Orphan", "Desc", $"SKU-{Guid.NewGuid():N}", 5m)));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateProduct_WithItsOwnSku_ShouldSucceed()
+    {
+        // Arrange
+        var category = await CreateCategoryAsync();
+        var product = await CreateProductAsync(category.Id);
+
+        // Act
+        var response = await _client.SendAsync(Admin(
+            HttpMethod.Put, $"/api/admin/products/{product.Id}",
+            new AdminUpdateProductRequest(Sku: product.Sku.ToLowerInvariant(), Price: 99m)));
+
+        // Assert
+        response.EnsureSuccessStatusCode();
     }
 
     #endregion

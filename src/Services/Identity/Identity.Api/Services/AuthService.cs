@@ -57,7 +57,14 @@ public class AuthService : IAuthService
         user.PasswordHash = _hasher.HashPassword(user, request.Password);
 
         _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<AuthResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
+        }
 
         _logger.LogInformation("User registered successfully - Email: {Email}, Role: {Role}", user.Email, user.Role);
 
@@ -169,7 +176,14 @@ public class AuthService : IAuthService
                 user.PasswordHash = _hasher.HashPassword(user, request.Password);
             }
 
-            await _dbContext.SaveChangesAsync();
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+            {
+                return Result<UserResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
+            }
 
             _logger.LogInformation(
                 "User updated successfully - UserId: {UserId}",
@@ -252,7 +266,14 @@ public class AuthService : IAuthService
         user.PasswordHash = _hasher.HashPassword(user, request.Password);
 
         _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<UserResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
+        }
 
         _logger.LogInformation("User created successfully by admin - Email: {Email}, Role: {Role}", user.Email, user.Role);
 
@@ -284,7 +305,14 @@ public class AuthService : IAuthService
         user.Email = normalizedEmail;
         user.Role = request.Role;
 
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<UserResponse>.Failure("User with this email already exists.", ResultErrorType.Conflict);
+        }
 
         _logger.LogInformation("User updated. User Id:{UserId}, Email:{Email}, Role:{Role}", user.Id, user.Email, user.Role);
 

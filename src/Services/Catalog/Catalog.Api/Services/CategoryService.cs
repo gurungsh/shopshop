@@ -36,7 +36,9 @@ public class CategoryService : ICategoryService
 
         if (version is not null)
         {
-            cacheKey = CatalogCacheKeys.CategorySearch(version, query);
+            cacheKey = CatalogCacheKeys.CategorySearch(
+                version,
+                query with { Name = query.Name?.Trim().ToLowerInvariant(), Description = query.Description?.Trim().ToLowerInvariant() });
             var cached = await _cache.GetAsync<PagedResponse<CategoryResponse>>(cacheKey);
             if (cached is not null)
             {
@@ -53,12 +55,12 @@ public class CategoryService : ICategoryService
 
         if (!string.IsNullOrWhiteSpace(query.Name))
         {
-            categories = categories.Where(c => string.Equals(c.Name, query.Name));
+            categories = categories.Where(c => EF.Functions.ILike(c.Name, LikePattern.Contains(query.Name), LikePattern.Escape));
         }
 
         if (!string.IsNullOrWhiteSpace(query.Description))
         {
-            categories = categories.Where(c => c.Description.Contains(query.Description));
+            categories = categories.Where(c => EF.Functions.ILike(c.Description, LikePattern.Contains(query.Description), LikePattern.Escape));
         }
 
         var totalCount = await categories.CountAsync();
@@ -121,6 +123,11 @@ public class CategoryService : ICategoryService
 
     public async Task<Result<CategoryResponse>> CreateCategoryAsync(AdminCreateCategoryRequest request)
     {
+        if (await _dbContext.Categories.AnyAsync(c => c.Name.ToLower() == request.Name.ToLower()))
+        {
+            return Result<CategoryResponse>.Failure("A Category with this name already exists.", ResultErrorType.Conflict);
+        }
+
         var category = new Category
         {
             Name = request.Name,
@@ -128,7 +135,14 @@ public class CategoryService : ICategoryService
         };
 
         _dbContext.Categories.Add(category);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<CategoryResponse>.Failure("A Category with this name already exists.", ResultErrorType.Conflict);
+        }
         await _cache.BumpVersionAsync();
 
         _logger.LogInformation("Category created. Category Id:{CategoryId}, Name:{Name}", category.Id, category.Name);
@@ -155,6 +169,11 @@ public class CategoryService : ICategoryService
 
         if (!string.IsNullOrWhiteSpace(request.Name))
         {
+            if (await _dbContext.Categories.AnyAsync(c => c.Name.ToLower() == request.Name.ToLower() && c.Id != id))
+            {
+                return Result<CategoryResponse>.Failure("A Category with this name already exists.", ResultErrorType.Conflict);
+            }
+
             category.Name = request.Name;
         }
 
@@ -170,7 +189,14 @@ public class CategoryService : ICategoryService
 
         category.UpdatedAtUtc = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<CategoryResponse>.Failure("A Category with this name already exists.", ResultErrorType.Conflict);
+        }
         await _cache.RemoveAsync(CatalogCacheKeys.Category(category.Id));
         await _cache.BumpVersionAsync();
 
