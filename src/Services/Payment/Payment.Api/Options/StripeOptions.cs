@@ -1,8 +1,8 @@
 namespace Payment.Api.Options;
 
-public sealed class StripeOptions
+public record StripeOptions
 {
     public const string SectionName = "Stripe";
 
-    public string SecretKey { get; set; } = string.Empty;
+    public string SecretKey { get; init; } = string.Empty;
 }

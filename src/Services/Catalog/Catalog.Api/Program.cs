@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Serilog;
+using StackExchange.Redis;
 
 // Logger setup
 Log.Logger = new LoggerConfiguration()
@@ -44,6 +45,11 @@ try
         throw new InvalidOperationException("JwtSettings MetadataAddress is missing or invalid.");
     }
 
+    if (string.IsNullOrWhiteSpace(jwtSettings.Issuer) || string.IsNullOrWhiteSpace(jwtSettings.Audience))
+    {
+        throw new InvalidOperationException("JwtSettings Issuer and Audience are required.");
+    }
+
     builder.Services.Configure<JwtOptions>(
         builder.Configuration.GetSection(JwtOptions.SectionName));
 
@@ -57,11 +63,18 @@ try
     var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
         ?? throw new InvalidOperationException("Connection string 'Redis' is missing.");
 
-    builder.Services.Configure<CacheOptions>(
-        builder.Configuration.GetSection(CacheOptions.SectionName));
+    builder.Services.AddOptions<CacheOptions>()
+        .BindConfiguration(CacheOptions.SectionName)
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
 
     builder.Services.AddStackExchangeRedisCache(options =>
-        options.Configuration = redisConnectionString);
+    {
+        var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
+        redisOptions.ConnectTimeout = Math.Min(redisOptions.ConnectTimeout, 1000);
+        redisOptions.AsyncTimeout = Math.Min(redisOptions.AsyncTimeout, 500);
+        options.ConfigurationOptions = redisOptions;
+    });
 
     builder.Services.AddSingleton<ICatalogCache, CatalogCache>();
 

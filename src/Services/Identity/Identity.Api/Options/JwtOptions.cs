@@ -1,12 +1,23 @@
-﻿namespace Identity.Api.Options;
+using System.ComponentModel.DataAnnotations;
+
+namespace Identity.Api.Options;
 
 public record JwtOptions
 {
     public const string SectionName = "JwtSettings";
 
-    public string PrivateKeyPem { get; set; } = string.Empty;
-    public string KeyId { get; set; } = string.Empty;
-    public string Issuer { get; set; } = string.Empty;
-    public string Audience { get; set; } = string.Empty;
-    public int ExpirationInMinutes { get; set; } = 60;
+    [Required]
+    public string PrivateKeyPem { get; init; } = string.Empty;
+
+    [Required]
+    public string KeyId { get; init; } = string.Empty;
+
+    [Required]
+    public string Issuer { get; init; } = string.Empty;
+
+    [Required]
+    public string Audience { get; init; } = string.Empty;
+
+    [Range(1, 1440)]
+    public int ExpirationInMinutes { get; init; } = 60;
 }

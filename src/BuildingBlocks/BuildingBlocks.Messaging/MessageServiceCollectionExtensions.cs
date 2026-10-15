@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.Extensions.Configuration;
@@ -21,9 +21,25 @@ public static class MessageServiceCollectionExtensions
             throw new InvalidOperationException("RabbitMq HostName, UserName and Password are required.");
         }
 
+        if (options.Port is < 1 or > 65535)
+        {
+            throw new InvalidOperationException("RabbitMq Port must be between 1 and 65535.");
+        }
+
         services.Configure<RabbitMqOptions>(section);
         services.AddSingleton<RabbitMqConnection>();
         services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddOutboxOptions(this IServiceCollection services)
+    {
+        services.AddOptions<OutboxOptions>()
+            .BindConfiguration(OutboxOptions.SectionName)
+            .Validate(o => o.PollingInterval > TimeSpan.Zero, "Outbox PollingInterval must be greater than zero.")
+            .Validate(o => o.BatchSize > 0, "Outbox BatchSize must be greater than zero.")
+            .ValidateOnStart();
 
         return services;
     }
