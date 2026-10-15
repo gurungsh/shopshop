@@ -57,8 +57,7 @@ try
 
     // Messaging: payment requests are consumed from the orders exchange, results go through the outbox to the payments exchange
     builder.Services.AddRabbitMq(builder.Configuration);
-    builder.Services.Configure<OutboxOptions>(
-        builder.Configuration.GetSection(OutboxOptions.SectionName));
+    builder.Services.AddOutboxOptions();
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<OrderEventsConsumer>();
 

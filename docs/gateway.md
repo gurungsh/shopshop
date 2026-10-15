@@ -154,11 +154,11 @@ sequenceDiagram
 | Ports | 5080 (HTTP) / 7080 (HTTPS) |
 | Packages | `Yarp.ReverseProxy`, `Swashbuckle.AspNetCore.SwaggerUI` (UI only, no spec generation) |
 | Swagger UI | `/swagger` (Development only) |
-| Config section | `ReverseProxy` (routes and clusters) in `appsettings.json` |
-| Frontend origins | `Cors:AllowedOrigins` (array) |
+| Config section | `ReverseProxy`: routes in `appsettings.json`, clusters (destination addresses) per environment |
+| Frontend origins | `Cors:AllowedOrigins` (array), per environment. The gateway refuses to start without it |
 | Secrets | None. Cluster addresses and origins are not secret |
 
-Cluster destinations in Development:
+The base `appsettings.json` deliberately has no cluster addresses or origins, so a deployment that forgets them fails at startup instead of proxying to localhost. Cluster destinations in Development (`appsettings.Development.json`):
 
 | Cluster | Address |
 |---|---|

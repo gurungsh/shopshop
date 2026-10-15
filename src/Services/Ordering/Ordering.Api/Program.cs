@@ -45,6 +45,11 @@ try
         throw new InvalidOperationException("JwtSettings MetadataAddress is missing or invalid.");
     }
 
+    if (string.IsNullOrWhiteSpace(jwtSettings.Issuer) || string.IsNullOrWhiteSpace(jwtSettings.Audience))
+    {
+        throw new InvalidOperationException("JwtSettings Issuer and Audience are required.");
+    }
+
     builder.Services.Configure<JwtOptions>(
         builder.Configuration.GetSection(JwtOptions.SectionName));
 
@@ -58,18 +63,10 @@ try
         throw new InvalidOperationException("CatalogService BaseUrl is missing or invalid.");
     }
 
-    var paymentSettings = builder.Configuration
-        .GetSection(PaymentOptions.SectionName)
-        .Get<PaymentOptions>()
-        ?? throw new InvalidOperationException("Payment configuration is missing.");
-
-    if (paymentSettings.MaxRetries < 0)
-    {
-        throw new InvalidOperationException("Payment MaxRetries must be zero or greater.");
-    }
-
-    builder.Services.Configure<PaymentOptions>(
-        builder.Configuration.GetSection(PaymentOptions.SectionName));
+    builder.Services.AddOptions<PaymentOptions>()
+        .BindConfiguration(PaymentOptions.SectionName)
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
 
     // Infrastructure and database services
     var connectionString = builder.Configuration.GetConnectionString("OrderDb")
@@ -119,8 +116,7 @@ try
 
     // Messaging: order events are written to the outbox and published to RabbitMQ in the background
     builder.Services.AddRabbitMq(builder.Configuration);
-    builder.Services.Configure<OutboxOptions>(
-        builder.Configuration.GetSection(OutboxOptions.SectionName));
+    builder.Services.AddOutboxOptions();
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<PaymentEventsConsumer>();
 

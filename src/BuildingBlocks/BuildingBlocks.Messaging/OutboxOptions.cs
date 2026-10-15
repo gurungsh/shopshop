@@ -1,4 +1,4 @@
-﻿namespace Ordering.Api.Options;
+namespace BuildingBlocks.Messaging;
 
 public record OutboxOptions
 {
