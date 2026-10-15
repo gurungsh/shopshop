@@ -57,6 +57,20 @@ try
     });
 
     // Reverse proxy
+    var proxySection = builder.Configuration.GetSection("ReverseProxy");
+    var clusterIds = proxySection.GetSection("Clusters").GetChildren().Select(c => c.Key).ToHashSet();
+    var unknownClusters = proxySection.GetSection("Routes").GetChildren()
+        .Select(r => r["ClusterId"])
+        .Where(id => id is null || !clusterIds.Contains(id))
+        .Distinct()
+        .ToList();
+
+    if (unknownClusters.Count > 0)
+    {
+        throw new InvalidOperationException(
+            $"ReverseProxy routes reference clusters that are not configured: {string.Join(", ", unknownClusters.Select(id => id ?? "(none)"))}.");
+    }
+
     builder.Services.AddReverseProxy()
         .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
