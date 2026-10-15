@@ -36,19 +36,10 @@ try
     builder.Services.AddShopShopTelemetry("Identity.Api");
 
     // Configuration and options
-    var jwtSettings = builder.Configuration
-        .GetSection(JwtOptions.SectionName)
-        .Get<JwtOptions>()
-        ?? throw new InvalidOperationException("JwtSettings configuration is missing.");
-
-    if (string.IsNullOrWhiteSpace(jwtSettings.PrivateKeyPem) ||
-        string.IsNullOrWhiteSpace(jwtSettings.KeyId))
-    {
-        throw new InvalidOperationException("JWT PrivateKeyPem or KeyId is missing.");
-    }
-
-    builder.Services.Configure<JwtOptions>(
-        builder.Configuration.GetSection(JwtOptions.SectionName));
+    builder.Services.AddOptions<JwtOptions>()
+        .BindConfiguration(JwtOptions.SectionName)
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
 
     // Infrastructure and database services
     var connectionString = builder.Configuration.GetConnectionString("AuthDb")
