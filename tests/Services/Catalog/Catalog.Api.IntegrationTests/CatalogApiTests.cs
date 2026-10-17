@@ -57,6 +57,20 @@ public class CatalogApiTests(CatalogApiFactory factory)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Health_WithPostgresAndRedisUp_ShouldReturnHealthy()
+    {
+        // Act
+        var response = await _client.GetAsync("/health");
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Healthy", body.GetProperty("status").GetString());
+        Assert.Equal("Healthy", body.GetProperty("checks").GetProperty("postgres").GetString());
+        Assert.Equal("Healthy", body.GetProperty("checks").GetProperty("redis").GetString());
+    }
+
     #endregion
 
     #region Authorization Tests

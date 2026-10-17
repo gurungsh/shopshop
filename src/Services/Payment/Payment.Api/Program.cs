@@ -1,4 +1,5 @@
 using BuildingBlocks.Messaging;
+using BuildingBlocks.Web;
 using BuildingBlocks.Web.Observability;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
@@ -63,6 +64,11 @@ try
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<OrderEventsConsumer>();
 
+    // Dependency checks for /health
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<PaymentDbContext>("postgres")
+        .AddCheck<RabbitMqHealthCheck>("rabbitmq");
+
     var app = builder.Build();
 
     if (args.Contains("--migrate"))
@@ -104,7 +110,7 @@ try
     app.UseHttpsRedirection();
 
     // Endpoint routing: Payment has no public API, it only reacts to events
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Payment.Api" }));
+    app.MapHealthEndpoints("Payment.Api");
 
     Log.Information("Application pipeline configured. Running application.");
 

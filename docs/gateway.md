@@ -79,7 +79,7 @@ These routes live in `appsettings.json` with the API routes. A service serves it
 | `docs-catalog` | `/docs/catalog/swagger.json` | `catalog` | `/swagger/v1/swagger.json` |
 | `docs-ordering` | `/docs/ordering/swagger.json` | `ordering` | `/swagger/v1/swagger.json` |
 
-`/health` on the gateway reports only the gateway's own status (`{ Status, Service }`, like every other Api). Readiness checks that probe the downstream services belong to the existing readiness roadmap item.
+`/health` on the gateway has no dependency checks: it reports only the gateway's own status and does not probe the downstream services, which report their own health.
 
 ## Request flow
 
@@ -144,7 +144,7 @@ sequenceDiagram
 - Payment and Notification have no Swagger, so they don't appear.
 - Adding a service later takes one `/docs/<service>/swagger.json` route and one `SwaggerEndpoint` line.
 - Authorize with a Bearer token in each definition. The services' specs already declare the Bearer scheme.
-- Each service hides its `/health` from its OpenAPI document (`ExcludeFromDescription()`), because the gateway doesn't proxy it and "Try it out" would answer from the gateway's own `/health`. Check a service's health on its own port.
+- `/health` is a health-check endpoint, so it is not in any OpenAPI document. That is intended, because the gateway doesn't proxy it and "Try it out" would answer from the gateway's own `/health`. Check a service's health on its own port.
 
 ## Configuration and ports
 

@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using BuildingBlocks.Web;
 using BuildingBlocks.Web.Observability;
 using Gateway.Api.Middleware;
 using Microsoft.AspNetCore.Diagnostics;
@@ -74,6 +75,9 @@ try
     builder.Services.AddReverseProxy()
         .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
+    // Dependency checks for /health
+    builder.Services.AddHealthChecks();
+
     var app = builder.Build();
 
     app.UseMiddleware<CorrelationIdMiddleware>();
@@ -117,7 +121,7 @@ try
     app.UseRateLimiter();
 
     // Endpoint routing
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Gateway.Api" }));
+    app.MapHealthEndpoints("Gateway.Api");
     app.MapReverseProxy();
 
     Log.Information("Application pipeline configured. Running application.");

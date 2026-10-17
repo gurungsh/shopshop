@@ -1,4 +1,5 @@
 using BuildingBlocks.Messaging;
+using BuildingBlocks.Web;
 using BuildingBlocks.Web.Observability;
 using Microsoft.AspNetCore.Diagnostics;
 using Notification.Api.Messaging;
@@ -32,6 +33,10 @@ try
     builder.Services.AddRabbitMq(builder.Configuration);
     builder.Services.AddHostedService<OrderEventsConsumer>();
 
+    // Dependency checks for /health
+    builder.Services.AddHealthChecks()
+        .AddCheck<RabbitMqHealthCheck>("rabbitmq");
+
     var app = builder.Build();
 
     // Request logging early in the pipeline
@@ -60,7 +65,7 @@ try
     app.UseHttpsRedirection();
 
     // Endpoint routing
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Notification.Api" }));
+    app.MapHealthEndpoints("Notification.Api");
 
     Log.Information("Application pipeline configured. Running application.");
 

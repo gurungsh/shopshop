@@ -1,3 +1,4 @@
+using BuildingBlocks.Web;
 using BuildingBlocks.Web.Observability;
 using Catalog.Api.Cacheing;
 using Catalog.Api.Caching;
@@ -144,6 +145,11 @@ try
         });
     });
 
+    // Dependency checks for /health
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<CatalogDbContext>("postgres")
+        .AddCheck<RedisHealthCheck>("redis");
+
     var app = builder.Build();
 
     // One-shot mode for containers: apply migrations and exit (docker compose runs this before the app starts)
@@ -200,7 +206,7 @@ try
     app.UseAuthorization();
 
     // Endpoint routing 
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Catalog.Api" })).ExcludeFromDescription();
+    app.MapHealthEndpoints("Catalog.Api");
     app.MapCategoryEndpoints();
     app.MapAdminCategoryEndpoints();
     app.MapProductEndpoints();
