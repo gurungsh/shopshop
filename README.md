@@ -90,7 +90,7 @@ Other test payment methods are listed in the [API reference](docs/api.md#payment
 | [Caching](docs/caching.md) | Redis cache-aside for Catalog: keys, TTLs, invalidation |
 | [Testing](docs/testing.md) | Unit vs integration tests, Testcontainers setup, messaging tests |
 | [Gateway](docs/gateway.md) | YARP API gateway: routes, combined Swagger, responsibilities |
-| [Containers](docs/containers.md) | Dockerfile, running the whole system with `docker compose up`, startup order, secrets |
+| [Containers](docs/containers.md) | Dockerfile, running the whole system with `docker compose up`, startup order, secrets, published images, running in a cluster |
 | [Mock data](docs/seed-data.md) | Seeded outdoor shop: accounts and passwords, catalog, orders, how to reload |
 | [Observability](docs/observability.md) | OpenTelemetry traces, metrics and logs in Grafana; one trace per order |
 

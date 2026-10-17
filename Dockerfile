@@ -13,7 +13,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-RUN mkdir logs && chown "$APP_UID" logs
+# Group 0 gets the owner's rights: OpenShift runs the container as a random UID in group 0
+RUN mkdir logs && chown "$APP_UID:0" logs && chmod g=u logs
 COPY --from=build /app/publish .
 USER $APP_UID
 ENV APP_DLL=$DLL

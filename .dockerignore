@@ -2,6 +2,7 @@
 **/obj/
 **/logs/
 .git/
+.github/
 .vs/
 .vscode/
 .env
