@@ -16,6 +16,8 @@ How ShopShop is put together and where to find things in the code. For setup see
 
 ```text
 ShopShop/
+├── Dockerfile                      # one image definition for every app (see containers.md)
+├── docker-compose.yml              # infrastructure, migrations, every app and the gateway
 ├── src/
 │   ├── BuildingBlocks/
 │   │   ├── BuildingBlocks.Core         # Result<T>, ResultErrorType, Roles
@@ -23,7 +25,7 @@ ShopShop/
 │   │   ├── BuildingBlocks.Contracts    # integration events + routing keys (Orders/, Payments/)
 │   │   └── BuildingBlocks.Messaging    # RabbitMQ connection, publisher, consumer base, topology
 │   ├── Gateway/
-│   │   └── Gateway.Api                 # YARP reverse proxy, combined dev Swagger
+│   │   └── Gateway.Api                 # YARP reverse proxy, combined Swagger
 │   └── Services/
 │       ├── Identity/
 │       │   ├── Identity.Api

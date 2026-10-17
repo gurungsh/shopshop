@@ -69,9 +69,9 @@ Routes are prefix matches on the paths the services already use, so no path rewr
 | `ordering-orders` | `/api/orders/{**catch-all}` | `ordering` | Ordering.Api |
 | `ordering-admin-orders` | `/api/admin/orders/{**catch-all}` | `ordering` | Ordering.Api |
 
-### Development-only Swagger routes
+### Swagger routes
 
-These routes live in `appsettings.Development.json`, so they don't exist in other environments. Each one proxies a service's own OpenAPI document and rewrites the path with a `PathSet` transform.
+These routes live in `appsettings.json` with the API routes. A service serves its document only when its `OpenApi:Enabled` is `true`, so with the flag off they return 404. Each one proxies a service's own OpenAPI document and rewrites the path with a `PathSet` transform.
 
 | Route id | Path pattern | Cluster | Rewritten to |
 |---|---|---|---|
@@ -117,7 +117,7 @@ sequenceDiagram
 - **No aggregation or composition.** Cross-service data stays in services (Ordering calls Catalog). Aggregating responses would turn the gateway into a BFF, which can be a separate decision later.
 - **Gateway is a new top-level project**, `src/Gateway/Gateway.Api`, not part of any service and not in `BuildingBlocks`.
 - **Internal calls bypass it.** Routing service-to-service HTTP through the gateway would add a hop and a failure point for no benefit.
-- **Combined Swagger UI (Development only).** The gateway serves one Swagger UI at `/swagger` with a dropdown for Identity, Catalog and Ordering. It is not one merged document: each entry loads that service's own OpenAPI document through the proxy routes above. "Try it out" calls go to the gateway's origin, so they also exercise the gateway routing. Each service's own Swagger keeps working. See [Combined Swagger](#combined-swagger).
+- **Combined Swagger UI (when `OpenApi:Enabled` is `true`).** The gateway serves one Swagger UI at `/swagger` with a dropdown for Identity, Catalog and Ordering. It is not one merged document: each entry loads that service's own OpenAPI document through the proxy routes above. "Try it out" calls go to the gateway's origin, so they also exercise the gateway routing. Each service's own Swagger keeps working. See [Combined Swagger](#combined-swagger).
 - **Downstream URLs use HTTPS** in Development. Over plain HTTP, each service's `UseHttpsRedirection()` answers with a `307` to its own HTTPS port, and the browser then calls a different origin and fails on CORS. The .NET dev certificate is already trusted on the machine, so the gateway can call the HTTPS ports directly.
 
 ## Combined Swagger
@@ -140,7 +140,7 @@ sequenceDiagram
     G-->>B: Response
 ```
 
-- Development only: services expose Swagger only in Development, and the gateway adds the UI and the `/docs/*` routes only there.
+- Controlled by `OpenApi:Enabled` (default `false`) on the gateway and on each service. The Development files and `docker-compose.yml` set it to `true`. The gateway flag adds the UI, and each service flag serves that service's document. Turn on all four, or the UI loads without its definitions.
 - Payment and Notification have no Swagger, so they don't appear.
 - Adding a service later takes one `/docs/<service>/swagger.json` route and one `SwaggerEndpoint` line.
 - Authorize with a Bearer token in each definition. The services' specs already declare the Bearer scheme.
@@ -153,7 +153,7 @@ sequenceDiagram
 | Project | `src/Gateway/Gateway.Api` |
 | Ports | 5080 (HTTP) / 7080 (HTTPS) |
 | Packages | `Yarp.ReverseProxy`, `Swashbuckle.AspNetCore.SwaggerUI` (UI only, no spec generation) |
-| Swagger UI | `/swagger` (Development only) |
+| Swagger UI | `/swagger`, when `OpenApi:Enabled` is `true` |
 | Config section | `ReverseProxy`: routes in `appsettings.json`, clusters (destination addresses) per environment |
 | Frontend origins | `Cors:AllowedOrigins` (array), per environment. The gateway refuses to start without it |
 | Secrets | None. Cluster addresses and origins are not secret |

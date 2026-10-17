@@ -21,7 +21,7 @@ Customers place orders, Payment charges them through Stripe (test mode), and Ord
 | Ordering | Orders and their status. Publishes order events, applies payment results | 7055 |
 | Payment | Charges orders through Stripe. Event-driven, `/health` only | 7075 |
 | Notification | Logs order updates for now. Event-driven, `/health` only | 7062 |
-| Gateway | YARP reverse proxy in front of Identity, Catalog and Ordering. Combined Swagger in Development | 7080 |
+| Gateway | YARP reverse proxy in front of Identity, Catalog and Ordering. Combined Swagger behind `OpenApi:Enabled` | 7080 |
 
 Every API also exposes `GET /health`. The full endpoint list is in the [API reference](docs/api.md).
 
@@ -41,14 +41,14 @@ Every API also exposes `GET /health`. The full endpoint list is in the [API refe
 | API docs | Swashbuckle / Swagger UI with a Bearer scheme |
 | Testing | xUnit, Moq, EF Core InMemory provider, Testcontainers (PostgreSQL, RabbitMQ, Redis) |
 | Caching | Redis 7 (Docker) via `Microsoft.Extensions.Caching.StackExchangeRedis` |
-| Local infrastructure | Docker Compose (PostgreSQL + RabbitMQ with management UI + Redis + Grafana `otel-lgtm`) |
+| Local infrastructure | Docker Compose (PostgreSQL + RabbitMQ with management UI + Redis + Grafana `otel-lgtm`), and optionally every app as a container |
 
 ## Getting started
 
 1. **Start PostgreSQL, RabbitMQ, Redis and Grafana.** Create a `.env` file (see [configuration](docs/configuration.md#docker-environment)), then:
 
    ```bash
-   docker compose up -d
+   docker compose up -d postgres rabbitmq redis lgtm
    ```
 
 2. **Set the user secrets** for each service, including a generated signing key for Identity. See [configuration](docs/configuration.md#user-secrets).
@@ -65,6 +65,8 @@ Every API also exposes `GET /health`. The full endpoint list is in the [API refe
    ```
 
    Run Catalog, Ordering, Payment and Notification the same way. Then run `src/Gateway/Gateway.Api` and open https://localhost:7080/swagger for one Swagger UI across Identity, Catalog and Ordering. Ports and Swagger URLs are in [configuration](docs/configuration.md#ports).
+
+   Prefer containers? `docker compose up -d --build` runs the infrastructure, the migrations, the mock data, every service and the gateway on http://localhost:5080. See [containers](docs/containers.md) and [mock data](docs/seed-data.md) for the accounts.
 
 4. **Run every consumer once.** Payment, Ordering and Notification each create their own queue on first start. Until then events for them cannot be delivered and block the sender. See [messaging](docs/messaging.md#start-every-consumer-at-least-once).
 
@@ -88,6 +90,8 @@ Other test payment methods are listed in the [API reference](docs/api.md#payment
 | [Caching](docs/caching.md) | Redis cache-aside for Catalog: keys, TTLs, invalidation |
 | [Testing](docs/testing.md) | Unit vs integration tests, Testcontainers setup, messaging tests |
 | [Gateway](docs/gateway.md) | YARP API gateway: routes, combined Swagger, responsibilities |
+| [Containers](docs/containers.md) | Dockerfile, running the whole system with `docker compose up`, startup order, secrets |
+| [Mock data](docs/seed-data.md) | Seeded outdoor shop: accounts and passwords, catalog, orders, how to reload |
 | [Observability](docs/observability.md) | OpenTelemetry traces, metrics and logs in Grafana; one trace per order |
 
 ## Roadmap
