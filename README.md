@@ -90,7 +90,7 @@ Other test payment methods are listed in the [API reference](docs/api.md#payment
 | [Caching](docs/caching.md) | Redis cache-aside for Catalog: keys, TTLs, invalidation |
 | [Testing](docs/testing.md) | Unit vs integration tests, Testcontainers setup, messaging tests |
 | [Gateway](docs/gateway.md) | YARP API gateway: routes, combined Swagger, responsibilities |
-| [Containers](docs/containers.md) | Dockerfile, running the whole system with `docker compose up`, startup order, secrets |
+| [Containers](docs/containers.md) | Dockerfile, running the whole system with `docker compose up`, startup order, secrets, published images, running in a cluster |
 | [Mock data](docs/seed-data.md) | Seeded outdoor shop: accounts and passwords, catalog, orders, how to reload |
 | [Observability](docs/observability.md) | OpenTelemetry traces, metrics and logs in Grafana; one trace per order |
 
@@ -107,8 +107,8 @@ Unchecked items are not implemented yet:
 - [x] **Redis caching** for Catalog product and category reads (cache-aside, invalidated on admin writes)
 - [x] **Integration tests** with Testcontainers for Identity, Catalog, Ordering, Payment and Notification
 - [x] **OpenTelemetry**: traces, metrics and logs in Grafana, with trace context carried through HTTP, RabbitMQ and the outbox
-- [ ] Readiness health checks
-- [ ] Identity refresh tokens and logout
-- [ ] Containerising all services
+- [x] **Containerizing all services**: every service and the gateway has an image, `docker compose up` runs the infrastructure, migrations, mock data and every app, and CI publishes the images to GHCR on every merge to `main`
+- [ ] **Readiness health checks**: `/health` returns a fixed response today. A readiness check should also confirm each service can reach its PostgreSQL database, RabbitMQ and (for Catalog) Redis
+- [ ] **Identity refresh tokens and logout**: `POST /api/auth/refresh` and `POST /api/auth/logout` are mapped but not implemented yet. Refresh should swap a refresh token for a new access token, and logout should revoke it
 
 The outboxes assume a single instance of each service. Scaling out would need row locking (`FOR UPDATE SKIP LOCKED`).
