@@ -84,6 +84,7 @@ try
         .AddJwtBearer(options =>
         {
             options.MetadataAddress = jwtSettings.MetadataAddress;
+            options.RequireHttpsMetadata = jwtSettings.RequireHttpsMetadata;
             options.Events = new JwtBearerEvents
             {
                 OnAuthenticationFailed = context =>
@@ -145,6 +146,15 @@ try
 
     var app = builder.Build();
 
+    // One-shot mode for containers: apply migrations and exit (docker compose runs this before the app starts)
+    if (args.Contains("--migrate"))
+    {
+        using var migrationScope = app.Services.CreateScope();
+        await migrationScope.ServiceProvider.GetRequiredService<CatalogDbContext>().Database.MigrateAsync();
+        Log.Information("Database migrated.");
+        return;
+    }
+
     // Serilog
     app.UseSerilogRequestLogging();
 
@@ -162,15 +172,20 @@ try
         });
     });
 
-    // Development tooling
-    if (app.Environment.IsDevelopment())
+    // OpenAPI document and UI, on in Development and wherever OpenApi:Enabled is set
+    if (app.Configuration.GetValue<bool>("OpenApi:Enabled"))
     {
-        Log.Information("Running in Development environment.");
         app.UseSwagger();
         app.UseSwaggerUI(options =>
         {
             options.SwaggerEndpoint("/swagger/v1/swagger.json", "Catalog API v1");
         });
+    }
+
+    // Development tooling
+    if (app.Environment.IsDevelopment())
+    {
+        Log.Information("Running in Development environment.");
 
         using var scope = app.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();

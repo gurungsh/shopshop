@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/logs/
+.git/
+.vs/
+.vscode/
+.env
+docs/
+scripts/
+tests/
+*.md

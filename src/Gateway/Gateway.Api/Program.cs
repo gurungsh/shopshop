@@ -98,7 +98,10 @@ try
     if (app.Environment.IsDevelopment())
     {
         Log.Information("Running in Development environment.");
+    }
 
+    if (app.Configuration.GetValue<bool>("OpenApi:Enabled"))
+    {
         // Combined Swagger UI: each entry loads a service's own document through the proxy
         app.UseSwaggerUI(options =>
         {
