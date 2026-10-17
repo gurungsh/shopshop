@@ -1,6 +1,6 @@
 # Configuration
 
-What each service needs to run locally. Non-secret local values (connection strings with the throwaway `REMOVED`/`REMOVED` dev credentials, JWT issuer and audience, URLs) are committed in each service's `appsettings.Development.json`. Real secrets, the Stripe key and Identity's signing key, come from **user secrets**. Never put those in a committed file.
+What each service needs to run locally. Non-secret local values (JWT issuer and audience, URLs, host names) are committed in each service's `appsettings.Development.json`. Anything with a password or key in it (database connection strings, RabbitMQ credentials, the Stripe key and Identity's signing key) comes from **user secrets**. Never put a password or key in a committed file, not even a local dev one.
 
 ## Contents
 
@@ -31,13 +31,13 @@ These credentials are applied only the first time a container starts with an emp
 
 ## User secrets
 
-Only two values are real secrets: `JwtSettings:PrivateKeyPem` (Identity) and `Stripe:SecretKey` (Payment). Copy `.env.example` to `.env`, put your Stripe test key in it, and run `scripts/setup-user-secrets.sh`. It also generates the signing key if `~/shopshop-keys/jwt-private.pem` is missing. To set a key by hand:
+The secrets are the database connection strings (`ConnectionStrings:AuthDb`, `CatalogDb`, `OrderDb`, `PaymentDb`), `RabbitMq:UserName` and `RabbitMq:Password` (Ordering, Payment, Notification), `JwtSettings:PrivateKeyPem` (Identity) and `Stripe:SecretKey` (Payment). Copy `.env.example` to `.env`, fill in every value, and run `scripts/setup-user-secrets.sh`. It builds the connection strings and RabbitMQ credentials from the same `.env` values Docker Compose uses, so the apps and the containers always agree, and generates the signing key if `~/shopshop-keys/jwt-private.pem` is missing. Rerun it after changing `.env`. To set a key by hand:
 
 ```bash
 dotnet user-secrets set "<Key>" "<Value>" --project src/Services/<Svc>/<Svc>.Api
 ```
 
-Every key a service reads is listed below. Only the two secrets above are missing from `appsettings.Development.json`; any key can be overridden with a user secret.
+Every key a service reads is listed below. Only the secrets above are missing from `appsettings.Development.json`; any key can be overridden with a user secret.
 
 | Service | Keys |
 |---|---|
@@ -50,7 +50,7 @@ Every key a service reads is listed below. Only the two secrets above are missin
 
 Notes:
 
-- `RabbitMq:*` uses the same values for Ordering, Payment and Notification, and must match `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS`.
+- `RabbitMq:*` uses the same values for Ordering, Payment and Notification. The setup script sets the credentials from `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS`, and the connection strings from `POSTGRES_USER` / `POSTGRES_PASSWORD`.
 - `JwtSettings:Issuer` and `Audience` in Catalog and Ordering must match Identity's.
 - `JwtSettings:MetadataAddress` is Identity's discovery URL, for example `https://localhost:7244/.well-known/openid-configuration`.
 - `CatalogService:BaseUrl` must match the URL Catalog is running on.
