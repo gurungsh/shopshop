@@ -20,6 +20,8 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
+    builder.Configuration.AddKeyPerFile("/run/secrets", optional: true);
+
     // Serilog
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
@@ -62,6 +64,14 @@ try
     builder.Services.AddHostedService<OrderEventsConsumer>();
 
     var app = builder.Build();
+
+    if (args.Contains("--migrate"))
+    {
+        using var migrationScope = app.Services.CreateScope();
+        await migrationScope.ServiceProvider.GetRequiredService<PaymentDbContext>().Database.MigrateAsync();
+        Log.Information("Database migrated.");
+        return;
+    }
 
     // Request logging early in the pipeline
     app.UseSerilogRequestLogging();

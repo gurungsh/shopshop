@@ -1,3 +1,32 @@
+x-service: &service
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+
+x-migrate: &migrate
+  restart: "no"
+  command: ["--migrate"]
+  healthcheck:
+    disable: true
+
+x-env-common: &env-common
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
+
+x-env-rabbitmq: &env-rabbitmq
+  RabbitMq__HostName: rabbitmq
+  RabbitMq__UserName: ${RABBITMQ_DEFAULT_USER}
+  RabbitMq__Password: ${RABBITMQ_DEFAULT_PASS}
+
+x-env-jwt-consumer: &env-jwt-consumer
+  JwtSettings__MetadataAddress: http://identity:8080/.well-known/openid-configuration
+  JwtSettings__Issuer: http://identity:8080
+  JwtSettings__Audience: shopshop
+  JwtSettings__RequireHttpsMetadata: "false"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -54,6 +83,182 @@ services:
       - "4318:4318"   # OTLP HTTP
     volumes:
       - lgtm_data:/data
+
+  identity: &identity
+    <<: *service
+    image: shopshop/identity
+    build:
+      context: .
+      args:
+        PROJECT: src/Services/Identity/Identity.Api
+        DLL: Identity.Api.dll
+    environment:
+      <<: *env-common
+      ConnectionStrings__AuthDb: Host=postgres;Port=5432;Database=AuthDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      OpenApi__Enabled: "true"
+      JwtSettings__KeyId: shopshop-docker
+      JwtSettings__Issuer: http://identity:8080
+      JwtSettings__Audience: shopshop
+    secrets:
+      - source: jwt_private_key
+        target: JwtSettings__PrivateKeyPem
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  identity-migrate:
+    <<: [*migrate, *identity]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  catalog: &catalog
+    <<: *service
+    image: shopshop/catalog
+    build:
+      context: .
+      args:
+        PROJECT: src/Services/Catalog/Catalog.Api
+        DLL: Catalog.Api.dll
+    environment:
+      <<: [*env-common, *env-jwt-consumer]
+      OpenApi__Enabled: "true"
+      ConnectionStrings__CatalogDb: Host=postgres;Port=5432;Database=CatalogDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+
+  catalog-migrate:
+    <<: [*migrate, *catalog]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ordering: &ordering
+    <<: *service
+    image: shopshop/ordering
+    build:
+      context: .
+      args:
+        PROJECT: src/Services/Ordering/Ordering.Api
+        DLL: Ordering.Api.dll
+    environment:
+      <<: [*env-common, *env-rabbitmq, *env-jwt-consumer]
+      OpenApi__Enabled: "true"
+      ConnectionStrings__OrderDb: Host=postgres;Port=5432;Database=OrderDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      CatalogService__BaseUrl: http://catalog:8080
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+
+  ordering-migrate:
+    <<: [*migrate, *ordering]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payment: &payment
+    <<: *service
+    image: shopshop/payment
+    build:
+      context: .
+      args:
+        PROJECT: src/Services/Payment/Payment.Api
+        DLL: Payment.Api.dll
+    environment:
+      <<: [*env-common, *env-rabbitmq]
+      ConnectionStrings__PaymentDb: Host=postgres;Port=5432;Database=PaymentDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    secrets:
+      - source: stripe_secret_key
+        target: Stripe__SecretKey
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  payment-migrate:
+    <<: [*migrate, *payment]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-shot: loads the mock data in scripts/seed/<Database>.sql after the migrations. Rerunning never overwrites rows.
+  seed:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./scripts/seed:/seed:ro
+    command: ["sh", "-c", "for db in AuthDb CatalogDb OrderDb PaymentDb; do psql -v ON_ERROR_STOP=1 -q -d $$db -f /seed/$$db.sql || exit 1; done"]
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+      catalog-migrate:
+        condition: service_completed_successfully
+      ordering-migrate:
+        condition: service_completed_successfully
+      payment-migrate:
+        condition: service_completed_successfully
+
+  notification:
+    <<: *service
+    image: shopshop/notification
+    build:
+      context: .
+      args:
+        PROJECT: src/Services/Notification/Notification.Api
+        DLL: Notification.Api.dll
+    environment:
+      <<: [*env-common, *env-rabbitmq]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  gateway:
+    <<: *service
+    image: shopshop/gateway
+    build:
+      context: .
+      args:
+        PROJECT: src/Gateway/Gateway.Api
+        DLL: Gateway.Api.dll
+    environment:
+      <<: *env-common
+      OpenApi__Enabled: "true"
+      Cors__AllowedOrigins__0: ${CORS_ORIGIN:-http://localhost:3000}
+      ReverseProxy__Clusters__identity__Destinations__primary__Address: http://identity:8080
+      ReverseProxy__Clusters__catalog__Destinations__primary__Address: http://catalog:8080
+      ReverseProxy__Clusters__ordering__Destinations__primary__Address: http://ordering:8080
+    ports:
+      - "${GATEWAY_PORT:-5080}:8080"
+    depends_on:
+      identity:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+      ordering:
+        condition: service_healthy
+
+secrets:
+  jwt_private_key:
+    file: ${JWT_PRIVATE_KEY_FILE:-${HOME}/shopshop-keys/jwt-private.pem}
+  stripe_secret_key:
+    environment: STRIPE_SECRET_KEY
 
 volumes:
   postgres_data:

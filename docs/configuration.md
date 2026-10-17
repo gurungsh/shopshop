@@ -22,8 +22,10 @@ RABBITMQ_DEFAULT_PASS=
 ```
 
 ```bash
-docker compose up -d
+docker compose up -d postgres rabbitmq redis lgtm
 ```
+
+To run the apps in containers as well, use `docker compose up -d --build`; see [containers](containers.md).
 
 These credentials are applied only the first time a container starts with an empty volume. Redis and the Grafana `lgtm` container need no `.env` values.
 
@@ -40,8 +42,8 @@ Every key a service reads is listed below. Only the two secrets above are missin
 | Service | Keys |
 |---|---|
 | Identity | `ConnectionStrings:AuthDb`, `JwtSettings:PrivateKeyPem`, `JwtSettings:KeyId`, `JwtSettings:Issuer`, `JwtSettings:Audience`, `JwtSettings:ExpirationInMinutes` |
-| Catalog | `ConnectionStrings:CatalogDb`, `ConnectionStrings:Redis`, `JwtSettings:MetadataAddress`, `JwtSettings:Issuer`, `JwtSettings:Audience` |
-| Ordering | `ConnectionStrings:OrderDb`, `JwtSettings:MetadataAddress`, `JwtSettings:Issuer`, `JwtSettings:Audience`, `CatalogService:BaseUrl`, `RabbitMq:HostName`, `RabbitMq:UserName`, `RabbitMq:Password` (optional `Port`, `VirtualHost`), optional `Payment:MaxRetries`, `Outbox:*` |
+| Catalog | `ConnectionStrings:CatalogDb`, `ConnectionStrings:Redis`, `JwtSettings:MetadataAddress`, `JwtSettings:Issuer`, `JwtSettings:Audience`, optional `JwtSettings:RequireHttpsMetadata` (default `true`) |
+| Ordering | `ConnectionStrings:OrderDb`, `JwtSettings:MetadataAddress`, `JwtSettings:Issuer`, `JwtSettings:Audience`, optional `JwtSettings:RequireHttpsMetadata`, `CatalogService:BaseUrl`, `RabbitMq:HostName`, `RabbitMq:UserName`, `RabbitMq:Password` (optional `Port`, `VirtualHost`), optional `Payment:MaxRetries`, `Outbox:*` |
 | Payment | `ConnectionStrings:PaymentDb`, `RabbitMq:*`, `Stripe:SecretKey` (a test key, `sk_test_...`), optional `Outbox:*` |
 | Notification | `RabbitMq:*` |
 | Gateway | `Cors:AllowedOrigins`, `ReverseProxy:Clusters:<name>:Destinations` (routes are in `appsettings.json`, the local cluster addresses and origin in `appsettings.Development.json`) |
@@ -83,11 +85,13 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out ~/shopshop-key
 | Ordering | https://localhost:7055, http://localhost:5077 | `/swagger` |
 | Payment | https://localhost:7075, http://localhost:5051 | none (`/health` only) |
 | Notification | https://localhost:7062, http://localhost:5062 | none (`/health` only) |
-| Gateway | https://localhost:7080, http://localhost:5080 | `/swagger` (combined, Development only) |
+| Gateway | https://localhost:7080, http://localhost:5080 | `/swagger` (combined) |
 | RabbitMQ management | http://localhost:15672 | |
 | Redis | localhost:6379 | |
 | Grafana (`lgtm`) | http://localhost:3000 (`admin` / `admin`) | |
 | OTLP collector (`lgtm`) | localhost:4317 (gRPC), localhost:4318 (HTTP) | |
+
+Swagger is controlled by `OpenApi:Enabled` (default `false`) on the gateway, Identity, Catalog and Ordering. Each `appsettings.Development.json` sets it to `true`. In any other environment, set `OpenApi__Enabled=true` to turn it on. See [gateway](gateway.md#combined-swagger).
 
 The gateway calls Identity, Catalog and Ordering on their HTTPS ports, so run those with the `https` profile. Its local cluster addresses and `Cors:AllowedOrigins` are in `Gateway.Api/appsettings.Development.json` and are not secret. Other environments must supply both, because the base `appsettings.json` has only the routes.
 

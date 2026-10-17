@@ -1,0 +1,65 @@
+-- Mock catalog for the outdoor and recreation shop. Safe to rerun: existing rows are left alone.
+BEGIN;
+
+INSERT INTO "Categories" ("Id", "Name", "Description", "IsActive", "CreatedAtUtc", "UpdatedAtUtc") VALUES
+('0c000000-0000-0000-0000-000000000001', 'Camping & Tents',    'Tents, sleeping bags, pads, stoves and camp lighting.',          true, '2026-06-01T09:00:00Z', '2026-06-01T09:00:00Z'),
+('0c000000-0000-0000-0000-000000000002', 'Backpacks & Bags',   'Trekking packs, daypacks, hydration packs and dry bags.',        true, '2026-06-01T09:00:00Z', '2026-06-01T09:00:00Z'),
+('0c000000-0000-0000-0000-000000000003', 'Footwear',           'Hiking boots, trail runners, sandals and socks.',                true, '2026-06-01T09:00:00Z', '2026-06-01T09:00:00Z'),
+('0c000000-0000-0000-0000-000000000004', 'Outdoor Clothing',   'Shells, insulation, fleece, base layers and sun protection.',    true, '2026-06-01T09:00:00Z', '2026-06-01T09:00:00Z'),
+('0c000000-0000-0000-0000-000000000005', 'Climbing',           'Harnesses, helmets, ropes and hardware.',                        true, '2026-06-01T09:00:00Z', '2026-06-01T09:00:00Z'),
+('0c000000-0000-0000-0000-000000000006', 'Water Sports',       'Kayaks, paddleboards, paddles and life vests.',                  true, '2026-06-01T09:00:00Z', '2026-06-01T09:00:00Z'),
+('0c000000-0000-0000-0000-000000000007', 'Cycling',            'Mountain bikes, helmets, lights and repair tools.',              true, '2026-06-01T09:00:00Z', '2026-06-01T09:00:00Z'),
+('0c000000-0000-0000-0000-000000000008', 'Hiking Accessories', 'Trekking poles, headlamps, water filters and first aid.',        true, '2026-06-01T09:00:00Z', '2026-06-01T09:00:00Z')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO "Products" ("Id", "CategoryId", "Name", "Description", "Sku", "Price", "IsActive", "CreatedAtUtc", "UpdatedAtUtc") VALUES
+-- Camping & Tents
+('0d000000-0000-0000-0000-000000000001', '0c000000-0000-0000-0000-000000000001', 'Trailhead 2-Person Backpacking Tent', 'Freestanding three-season tent, 1.8 kg packed, with two doors and vestibules.', 'CMP-TENT-2P',     249.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000002', '0c000000-0000-0000-0000-000000000001', 'Basecamp 6-Person Family Tent',      'Tall cabin-style tent with a room divider and a full rainfly.',                 'CMP-TENT-6P',     429.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000003', '0c000000-0000-0000-0000-000000000001', 'Summit 20°F Down Sleeping Bag',      '650-fill water-resistant down in a mummy cut, rated to 20°F.',                  'CMP-BAG-20F',     289.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000004', '0c000000-0000-0000-0000-000000000001', 'Self-Inflating Sleeping Pad',        'Open-cell foam pad, 5 cm thick, R-value 4.2.',                                   'CMP-PAD-SI',       89.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000005', '0c000000-0000-0000-0000-000000000001', 'Compact Backpacking Stove',          'Canister stove that boils a liter of water in about 3.5 minutes.',              'CMP-STOVE-1',      54.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000006', '0c000000-0000-0000-0000-000000000001', 'Rechargeable LED Lantern',           '500-lumen camp lantern with a USB-C battery that also charges a phone.',        'CMP-LANT-LED',     39.99, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+-- Backpacks & Bags
+('0d000000-0000-0000-0000-000000000007', '0c000000-0000-0000-0000-000000000002', 'Ridgeline 65L Trekking Pack',        'Adjustable torso, ventilated back panel and a removable lid for multi-day trips.', 'BAG-PACK-65',   279.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000008', '0c000000-0000-0000-0000-000000000002', 'Daytripper 28L Hiking Daypack',      'Lightweight daypack with a rain cover and hip-belt pockets.',                   'BAG-PACK-28',     119.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000009', '0c000000-0000-0000-0000-000000000002', 'Hydration Pack 2L',                  'Running-vest fit with a 2 L reservoir and a quick-release hose.',               'BAG-HYD-2L',       64.99, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000010', '0c000000-0000-0000-0000-000000000002', 'Waterproof Dry Bag 20L',             'Roll-top dry bag with welded seams for paddling and wet trails.',               'BAG-DRY-20',       29.99, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000039', '0c000000-0000-0000-0000-000000000002', 'Vintage Canvas Rucksack',            'Waxed canvas rucksack with leather straps. Discontinued.',                      'BAG-RUCK-CANVAS',  89.00, false, '2026-06-02T09:00:00Z', '2026-09-01T09:00:00Z'),
+-- Footwear
+('0d000000-0000-0000-0000-000000000011', '0c000000-0000-0000-0000-000000000003', 'Alpine Mid Waterproof Hiking Boot',  'Waterproof membrane, Vibram sole and a supportive mid-height cuff.',            'FTW-BOOT-MID',    189.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000012', '0c000000-0000-0000-0000-000000000003', 'Trail Runner GTX',                   'Low-profile waterproof trail running shoe with aggressive lugs.',               'FTW-TRAIL-RUN',   149.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000013', '0c000000-0000-0000-0000-000000000003', 'River Sandal',                       'Quick-drying strap sandal with a grippy sole for river crossings.',             'FTW-SANDAL',       69.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000014', '0c000000-0000-0000-0000-000000000003', 'Merino Hiking Socks (3-Pack)',       'Cushioned merino wool crew socks that resist odor.',                            'FTW-SOCK-3PK',     34.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+-- Outdoor Clothing
+('0d000000-0000-0000-0000-000000000015', '0c000000-0000-0000-0000-000000000004', 'Stormshell Rain Jacket',             'Three-layer waterproof breathable shell with pit zips.',                        'CLO-JKT-RAIN',    199.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000016', '0c000000-0000-0000-0000-000000000004', 'Packable Down Jacket',               '800-fill down jacket that packs into its own pocket.',                          'CLO-JKT-DOWN',    229.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000017', '0c000000-0000-0000-0000-000000000004', 'Midweight Fleece Pullover',          'Quarter-zip grid fleece for layering on cool mornings.',                        'CLO-FLEECE',       89.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000018', '0c000000-0000-0000-0000-000000000004', 'Convertible Hiking Pants',           'Stretch nylon pants with zip-off legs and UPF 50 protection.',                  'CLO-PANT-CONV',    79.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000019', '0c000000-0000-0000-0000-000000000004', 'Merino Base Layer Top',              'Lightweight long-sleeve merino top for warmth without bulk.',                   'CLO-BASE-TOP',     85.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000020', '0c000000-0000-0000-0000-000000000004', 'Sun Hat with Neck Cape',             'Wide-brim UPF 50 hat with a removable neck cape.',                              'CLO-HAT-SUN',      32.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+-- Climbing
+('0d000000-0000-0000-0000-000000000021', '0c000000-0000-0000-0000-000000000005', 'All-Around Climbing Harness',        'Comfortable gym-to-crag harness with four gear loops.',                         'CLM-HARN',         69.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000022', '0c000000-0000-0000-0000-000000000005', 'Climbing Helmet',                    'Lightweight hybrid-shell helmet with a headlamp clip.',                         'CLM-HELM',         79.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000023', '0c000000-0000-0000-0000-000000000005', 'Dynamic Rope 9.8mm x 60m',           'Single-rated dynamic rope with a middle mark and dry treatment.',               'CLM-ROPE-60',     219.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000024', '0c000000-0000-0000-0000-000000000005', 'Locking Carabiner Set (4)',          'Four screw-gate HMS carabiners for belaying and anchors.',                      'CLM-CARA-4',       49.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000025', '0c000000-0000-0000-0000-000000000005', 'Chalk Bag with Belt',                'Fleece-lined chalk bag with a brush holder.',                                   'CLM-CHALK',        24.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+-- Water Sports
+('0d000000-0000-0000-0000-000000000026', '0c000000-0000-0000-0000-000000000006', 'Touring Kayak 12ft',                 'Stable sit-inside touring kayak with bow and stern hatches.',                   'WTR-KAYAK-12',    899.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000027', '0c000000-0000-0000-0000-000000000006', 'Inflatable Stand-Up Paddleboard',    '10''6" all-around board with a pump, paddle and travel bag.',                   'WTR-SUP-INF',     649.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000028', '0c000000-0000-0000-0000-000000000006', 'Adjustable Kayak Paddle',            'Fiberglass shaft, two-piece paddle adjustable from 220 to 240 cm.',             'WTR-PADDLE',      129.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000029', '0c000000-0000-0000-0000-000000000006', 'Paddling Life Vest (PFD)',           'Low-profile Type III life vest with a zip pocket.',                             'WTR-PFD',          99.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+-- Cycling
+('0d000000-0000-0000-0000-000000000030', '0c000000-0000-0000-0000-000000000007', 'Trail Hardtail Mountain Bike',       'Aluminum hardtail with a 120 mm fork, 1x12 drivetrain and hydraulic brakes.',   'CYC-MTB-HT',     1249.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000031', '0c000000-0000-0000-0000-000000000007', 'MIPS Bike Helmet',                   'Trail helmet with MIPS rotational protection and a visor.',                     'CYC-HELM',        119.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000032', '0c000000-0000-0000-0000-000000000007', 'Bike Repair Multi-Tool',             '18-function tool with a chain breaker and tire levers.',                        'CYC-TOOL',         29.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000033', '0c000000-0000-0000-0000-000000000007', 'Front & Rear Bike Light Set',        'USB-rechargeable 800-lumen front and 100-lumen rear lights.',                   'CYC-LIGHT',        49.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+-- Hiking Accessories
+('0d000000-0000-0000-0000-000000000034', '0c000000-0000-0000-0000-000000000008', 'Carbon Trekking Poles (Pair)',       'Three-section carbon poles with cork grips and flick locks.',                   'ACC-POLES',       139.00, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000035', '0c000000-0000-0000-0000-000000000008', 'Headlamp 400 Lumen',                 'Rechargeable headlamp with red night mode and a lock switch.',                  'ACC-HEADLAMP',     44.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000036', '0c000000-0000-0000-0000-000000000008', 'Water Filter Bottle',                'Squeeze bottle with a 0.1-micron hollow-fiber filter.',                         'ACC-FILTER',       39.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000037', '0c000000-0000-0000-0000-000000000008', 'Wilderness First Aid Kit',           'Compact kit for one to four people on trips up to four days.',                  'ACC-FIRSTAID',     34.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z'),
+('0d000000-0000-0000-0000-000000000038', '0c000000-0000-0000-0000-000000000008', 'Baseplate Navigation Compass',       'Liquid-filled compass with declination adjustment and a sighting mirror.',      'ACC-COMPASS',      29.95, true,  '2026-06-02T09:00:00Z', '2026-06-02T09:00:00Z')
+ON CONFLICT DO NOTHING;
+
+COMMIT;

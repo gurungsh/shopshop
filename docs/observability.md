@@ -33,7 +33,7 @@ flowchart LR
 
 ## Looking at the data
 
-1. Start the stack with `docker compose up -d` (the `lgtm` service).
+1. Start the stack with `docker compose up -d`, or just `docker compose up -d lgtm`.
 2. Open http://localhost:3000 and sign in with `admin` / `admin`.
 3. In **Explore**, pick a data source:
 
