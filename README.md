@@ -109,6 +109,6 @@ Unchecked items are not implemented yet:
 - [x] **OpenTelemetry**: traces, metrics and logs in Grafana, with trace context carried through HTTP, RabbitMQ and the outbox
 - [x] **Containerizing all services**: every service and the gateway has an image, `docker compose up` runs the infrastructure, migrations, mock data and every app, and CI publishes the images to GHCR on every merge to `main`
 - [x] **Readiness health checks**: `/health` confirms each service can reach its PostgreSQL database, RabbitMQ and (for Catalog) Redis
-- [ ] **Identity refresh tokens and logout**: `POST /api/auth/refresh` and `POST /api/auth/logout` are mapped but not implemented yet. Refresh should swap a refresh token for a new access token, and logout should revoke it
+- [x] **Identity refresh tokens and logout**: `POST /api/auth/refresh` swaps a single-use refresh token for a new JWT and refresh token, and `POST /api/auth/logout` revokes the caller's refresh tokens
 
 The outboxes assume a single instance of each service. Scaling out would need row locking (`FOR UPDATE SKIP LOCKED`).

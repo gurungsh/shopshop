@@ -20,4 +20,7 @@ public record JwtOptions
 
     [Range(1, 1440)]
     public int ExpirationInMinutes { get; init; } = 60;
+
+    [Range(1, 90)]
+    public int RefreshTokenExpirationInDays { get; init; } = 7;
 }

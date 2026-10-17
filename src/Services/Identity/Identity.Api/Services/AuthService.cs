@@ -1,5 +1,8 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿using System.Buffers.Text;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using BuildingBlocks.Core;
 using Identity.Api.DTOs;
 using Identity.Api.Options;
@@ -68,10 +71,7 @@ public class AuthService : IAuthService
 
         _logger.LogInformation("User registered successfully - Email: {Email}, Role: {Role}", user.Email, user.Role);
 
-        var token = GenerateJwtToken(user);
-        var response = new AuthResponse(user.Id, user.Email, user.Role, token);
-
-        return Result<AuthResponse>.Success(response);
+        return Result<AuthResponse>.Success(await IssueTokensAsync(user));
     }
 
     public async Task<Result<AuthResponse>> LoginAsync(LoginRequest request)
@@ -102,19 +102,67 @@ public class AuthService : IAuthService
 
         _logger.LogInformation("User logged in successfully - Email: {Email}, Role: {Role}", normalizedEmail, user.Role);
 
-        var token = GenerateJwtToken(user);
-
-        return Result<AuthResponse>.Success(new AuthResponse(user.Id, user.Email, user.Role, token));
+        return Result<AuthResponse>.Success(await IssueTokensAsync(user));
     }
 
     public async Task<Result<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request)
     {
-        throw new NotImplementedException();
+        var tokenHash = HashRefreshToken(request.RefreshToken);
+
+        var refreshToken = await _dbContext.RefreshTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash);
+
+        if (refreshToken is null)
+        {
+            _logger.LogWarning("Refresh failed: Unknown refresh token.");
+            return Result<AuthResponse>.Failure("Invalid refresh token.", ResultErrorType.Unauthorized);
+        }
+
+        if (refreshToken.RevokedAtUtc is not null)
+        {
+            // A revoked token coming back means it may have been stolen, so end every session of the user.
+            _logger.LogWarning("Refresh failed: Revoked refresh token reused - UserId: {UserId}", refreshToken.UserId);
+            await RevokeRefreshTokensAsync(refreshToken.UserId);
+            return Result<AuthResponse>.Failure("Invalid refresh token.", ResultErrorType.Unauthorized);
+        }
+
+        if (refreshToken.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            _logger.LogWarning("Refresh failed: Expired refresh token - UserId: {UserId}", refreshToken.UserId);
+            return Result<AuthResponse>.Failure("Invalid refresh token.", ResultErrorType.Unauthorized);
+        }
+
+        // Rotate: the old token is revoked in the same save that stores the new one.
+        refreshToken.RevokedAtUtc = DateTime.UtcNow;
+
+        try
+        {
+            var response = await IssueTokensAsync(refreshToken.User);
+            _logger.LogInformation("Tokens refreshed - UserId: {UserId}", refreshToken.UserId);
+            return Result<AuthResponse>.Success(response);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _logger.LogWarning("Refresh failed: Refresh token used concurrently - UserId: {UserId}", refreshToken.UserId);
+            return Result<AuthResponse>.Failure("Invalid refresh token.", ResultErrorType.Unauthorized);
+        }
     }
 
     public async Task<Result<bool>> LogoutAsync(ClaimsPrincipal principal)
     {
-        throw new NotImplementedException();
+        var userId = GetUserId(principal);
+
+        if (userId is null)
+        {
+            return Result<bool>.Failure("Invalid user identity.", ResultErrorType.Unauthorized);
+        }
+
+        await RevokeRefreshTokensAsync(userId.Value);
+
+        _logger.LogInformation("User logged out - UserId: {UserId}", userId.Value);
+
+        return Result<bool>.Success(true);
     }
 
     public async Task<Result<UserResponse>> GetCurrentUserAsync(ClaimsPrincipal principal)
@@ -367,6 +415,42 @@ public class AuthService : IAuthService
         _logger.LogDebug("JWT token generated successfully for user: {Email}", user.Email);
 
         return tokenHandler.WriteToken(token);
+    }
+
+    private async Task<AuthResponse> IssueTokensAsync(User user)
+    {
+        var refreshToken = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+
+        _dbContext.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = HashRefreshToken(refreshToken),
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationInDays)
+        });
+
+        await _dbContext.SaveChangesAsync();
+
+        return new AuthResponse(user.Id, user.Email, user.Role, GenerateJwtToken(user), refreshToken);
+    }
+
+    private async Task RevokeRefreshTokensAsync(Guid userId)
+    {
+        var activeTokens = await _dbContext.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAtUtc == null)
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+        foreach (var token in activeTokens)
+        {
+            token.RevokedAtUtc = now;
+        }
+
+        await _dbContext.SaveChangesAsync();
+    }
+
+    private static string HashRefreshToken(string refreshToken)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
     }
 
     private static string NormalizeEmail(string email)

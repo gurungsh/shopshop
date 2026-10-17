@@ -166,6 +166,31 @@ public class IdentityApiTests(IdentityApiFactory factory)
 
     #endregion
 
+    #region Refresh and Logout Tests
+
+    [Fact]
+    public async Task Refresh_ThenLogout_ShouldRotateAndRevokeRefreshToken()
+    {
+        // Arrange
+        var auth = await RegisterAsync();
+
+        // Act
+        var refresh = await _client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest(auth.RefreshToken));
+        var refreshed = (await refresh.Content.ReadFromJsonAsync<AuthResponse>())!;
+        var me = await _client.SendAsync(Authorized(HttpMethod.Get, "/api/users/me", refreshed.Token));
+        var logout = await _client.SendAsync(Authorized(HttpMethod.Post, "/api/auth/logout", refreshed.Token));
+        var afterLogout = await _client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest(refreshed.RefreshToken));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
+        Assert.NotEqual(auth.RefreshToken, refreshed.RefreshToken);
+        Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, afterLogout.StatusCode);
+    }
+
+    #endregion
+
     #region Admin Tests
 
     [Fact]

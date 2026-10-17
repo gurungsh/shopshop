@@ -263,6 +263,7 @@ sequenceDiagram
 - **Public key:** Catalog and Ordering only configure `MetadataAddress`. JwtBearer fetches the key on the first token check and caches it.
 - **Identity down:** other services still start. Token checks return 401 until Identity is reachable again, then recover on their own.
 - **`kid`:** every token names its signing key, which leaves room for key rotation.
+- **Refresh tokens:** login also returns a random refresh token. `POST /api/auth/refresh` swaps it for a new JWT and a new refresh token, and logout revokes the refresh tokens. See the [Identity rules](api.md#identity).
 
 ## Order flow
 

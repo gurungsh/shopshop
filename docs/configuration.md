@@ -41,7 +41,7 @@ Every key a service reads is listed below. Only the two secrets above are missin
 
 | Service | Keys |
 |---|---|
-| Identity | `ConnectionStrings:AuthDb`, `JwtSettings:PrivateKeyPem`, `JwtSettings:KeyId`, `JwtSettings:Issuer`, `JwtSettings:Audience`, `JwtSettings:ExpirationInMinutes` |
+| Identity | `ConnectionStrings:AuthDb`, `JwtSettings:PrivateKeyPem`, `JwtSettings:KeyId`, `JwtSettings:Issuer`, `JwtSettings:Audience`, `JwtSettings:ExpirationInMinutes`, `JwtSettings:RefreshTokenExpirationInDays` |
 | Catalog | `ConnectionStrings:CatalogDb`, `ConnectionStrings:Redis`, `JwtSettings:MetadataAddress`, `JwtSettings:Issuer`, `JwtSettings:Audience`, optional `JwtSettings:RequireHttpsMetadata` (default `true`) |
 | Ordering | `ConnectionStrings:OrderDb`, `JwtSettings:MetadataAddress`, `JwtSettings:Issuer`, `JwtSettings:Audience`, optional `JwtSettings:RequireHttpsMetadata`, `CatalogService:BaseUrl`, `RabbitMq:HostName`, `RabbitMq:UserName`, `RabbitMq:Password` (optional `Port`, `VirtualHost`), optional `Payment:MaxRetries`, `Outbox:*` |
 | Payment | `ConnectionStrings:PaymentDb`, `RabbitMq:*`, `Stripe:SecretKey` (a test key, `sk_test_...`), optional `Outbox:*` |
@@ -56,7 +56,7 @@ Notes:
 - `CatalogService:BaseUrl` must match the URL Catalog is running on.
 - `ConnectionStrings:Redis` is for example `localhost:6379`. Catalog caps `connectTimeout` at 1000 ms and `asyncTimeout` at 500 ms in every environment, so requests stay fast when Redis is down.
 - `init-dbs.sql` creates the databases when the PostgreSQL container starts with an empty volume. Migrations create the tables.
-- Tunables that are not environment-specific live in the service's `appsettings.json`: Ordering's `Payment:MaxRetries`, Catalog's `Cache:*` TTLs, `Outbox:*` (Ordering, Payment), `RabbitMq:Port` / `VirtualHost`, and Identity's `JwtSettings:ExpirationInMinutes`.
+- Tunables that are not environment-specific live in the service's `appsettings.json`: Ordering's `Payment:MaxRetries`, Catalog's `Cache:*` TTLs, `Outbox:*` (Ordering, Payment), `RabbitMq:Port` / `VirtualHost`, and Identity's `JwtSettings:ExpirationInMinutes` and `JwtSettings:RefreshTokenExpirationInDays`.
 - Required values have no default. A service fails at startup with a clear message when one is missing or invalid: JWT `Issuer` and `Audience` (Identity, Catalog, Ordering), `MetadataAddress`, connection strings, `RabbitMq` host and credentials, the Stripe key, and the Gateway's `Cors:AllowedOrigins` and cluster addresses.
 
 ## Identity signing key
