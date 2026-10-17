@@ -18,8 +18,8 @@ Users, registration, login, JWT issuing and admin user management.
 ```text
 POST   /api/auth/register
 POST   /api/auth/login
-POST   /api/auth/refresh          (not implemented yet)
-POST   /api/auth/logout           (not implemented yet)
+POST   /api/auth/refresh
+POST   /api/auth/logout
 
 GET    /api/users/me
 PUT    /api/users/me
@@ -40,6 +40,8 @@ Identity rules:
 |---|---|
 | Email | Trimmed and stored in lowercase, so `Bob@X.com` and `bob@x.com` are the same user. The admin `email` search filter is an exact match after the same normalization. |
 | Duplicates | Registering, creating a user, or changing an email to one that is already taken gets 409, including when two requests race. |
+| Refresh tokens | Register, login and refresh return a JWT and a refresh token. A refresh token is valid for `JwtSettings:RefreshTokenExpirationInDays` (7 by default) and works once: `POST /api/auth/refresh` revokes it and returns a new pair. Using a revoked refresh token again revokes every refresh token of that user. Only a SHA-256 hash of each token is stored. |
+| Logout | Revokes every refresh token of the caller, so it signs out all of their sessions. The JWT stays valid until it expires (`JwtSettings:ExpirationInMinutes`), because services check JWTs without calling Identity. |
 
 ## Catalog
 

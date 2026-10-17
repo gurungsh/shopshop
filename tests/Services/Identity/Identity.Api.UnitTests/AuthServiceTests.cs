@@ -786,4 +786,127 @@ public class AuthServiceTests
     }
 
     #endregion
+
+    #region RefreshTokenAsync Tests
+
+    private async Task<AuthResponse> RegisterUserAsync()
+    {
+        _mockHasher
+            .Setup(h => h.HashPassword(It.IsAny<User>(), It.IsAny<string>()))
+            .Returns("hashed_password");
+
+        return (await _authService.RegisterAsync(new RegisterRequest($"{Guid.NewGuid():N}@example.com", "Test@123"))).Value!;
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ShouldStoreOnlyRefreshTokenHash()
+    {
+        // Act
+        var auth = await RegisterUserAsync();
+
+        // Assert
+        Assert.NotEmpty(auth.RefreshToken);
+        var stored = await _dbContext.RefreshTokens.SingleAsync(t => t.UserId == auth.Id);
+        Assert.NotEqual(auth.RefreshToken, stored.TokenHash);
+        Assert.Null(stored.RevokedAtUtc);
+    }
+
+    [Fact]
+    public async Task RefreshTokenAsync_WithValidToken_ShouldRotateTokens()
+    {
+        // Arrange
+        var auth = await RegisterUserAsync();
+
+        // Act
+        var result = await _authService.RefreshTokenAsync(new RefreshTokenRequest(auth.RefreshToken));
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(auth.Id, result.Value!.Id);
+        Assert.NotEqual(auth.RefreshToken, result.Value.RefreshToken);
+        Assert.Equal(3, result.Value.Token.Split('.').Length);
+
+        var tokens = await _dbContext.RefreshTokens.Where(t => t.UserId == auth.Id).ToListAsync();
+        Assert.Equal(2, tokens.Count);
+        Assert.Single(tokens, t => t.RevokedAtUtc is null);
+    }
+
+    [Fact]
+    public async Task RefreshTokenAsync_WithReusedToken_ShouldRevokeAllSessions()
+    {
+        // Arrange
+        var auth = await RegisterUserAsync();
+        var rotated = await _authService.RefreshTokenAsync(new RefreshTokenRequest(auth.RefreshToken));
+
+        // Act
+        var reuse = await _authService.RefreshTokenAsync(new RefreshTokenRequest(auth.RefreshToken));
+        var afterReuse = await _authService.RefreshTokenAsync(new RefreshTokenRequest(rotated.Value!.RefreshToken));
+
+        // Assert
+        Assert.Equal(ResultErrorType.Unauthorized, reuse.ErrorType);
+        Assert.Equal(ResultErrorType.Unauthorized, afterReuse.ErrorType);
+        Assert.All(await _dbContext.RefreshTokens.ToListAsync(), t => Assert.NotNull(t.RevokedAtUtc));
+    }
+
+    [Fact]
+    public async Task RefreshTokenAsync_WithExpiredToken_ShouldReturnUnauthorized()
+    {
+        // Arrange
+        var auth = await RegisterUserAsync();
+        var stored = await _dbContext.RefreshTokens.SingleAsync(t => t.UserId == auth.Id);
+        stored.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _authService.RefreshTokenAsync(new RefreshTokenRequest(auth.RefreshToken));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Unauthorized, result.ErrorType);
+    }
+
+    [Fact]
+    public async Task RefreshTokenAsync_WithUnknownToken_ShouldReturnUnauthorized()
+    {
+        // Act
+        var result = await _authService.RefreshTokenAsync(new RefreshTokenRequest("not-a-real-token"));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Unauthorized, result.ErrorType);
+    }
+
+    #endregion
+
+    #region LogoutAsync Tests
+
+    [Fact]
+    public async Task LogoutAsync_ShouldRevokeRefreshTokens()
+    {
+        // Arrange
+        var auth = await RegisterUserAsync();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(JwtRegisteredClaimNames.Sub, auth.Id.ToString())]));
+
+        // Act
+        var result = await _authService.LogoutAsync(principal);
+        var refresh = await _authService.RefreshTokenAsync(new RefreshTokenRequest(auth.RefreshToken));
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Unauthorized, refresh.ErrorType);
+    }
+
+    [Fact]
+    public async Task LogoutAsync_WithoutUserId_ShouldReturnUnauthorized()
+    {
+        // Act
+        var result = await _authService.LogoutAsync(new ClaimsPrincipal(new ClaimsIdentity()));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Unauthorized, result.ErrorType);
+    }
+
+    #endregion
 }
