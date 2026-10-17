@@ -81,6 +81,7 @@ try
         .AddJwtBearer(options =>
         {
             options.MetadataAddress = jwtSettings.MetadataAddress;
+            options.RequireHttpsMetadata = jwtSettings.RequireHttpsMetadata;
             options.Events = new JwtBearerEvents
             {
                 OnAuthenticationFailed = context =>
@@ -157,6 +158,14 @@ try
 
     var app = builder.Build();
 
+    if (args.Contains("--migrate"))
+    {
+        using var migrationScope = app.Services.CreateScope();
+        await migrationScope.ServiceProvider.GetRequiredService<OrderingDbContext>().Database.MigrateAsync();
+        Log.Information("Database migrated.");
+        return;
+    }
+
     // Request logging early in the pipeline
     app.UseSerilogRequestLogging();
 
@@ -174,15 +183,20 @@ try
         });
     });
 
-    // Development tooling
-    if (app.Environment.IsDevelopment())
+    // OpenAPI document and UI, on in Development and wherever OpenApi:Enabled is set
+    if (app.Configuration.GetValue<bool>("OpenApi:Enabled"))
     {
-        Log.Information("Running in Development environment.");
         app.UseSwagger();
         app.UseSwaggerUI(options =>
         {
             options.SwaggerEndpoint("/swagger/v1/swagger.json", "Ordering API v1");
         });
+    }
+
+    // Development tooling
+    if (app.Environment.IsDevelopment())
+    {
+        Log.Information("Running in Development environment.");
 
         using var scope = app.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();

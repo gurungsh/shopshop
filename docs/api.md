@@ -1,6 +1,6 @@
 # API reference
 
-The endpoints each service exposes. In Development every public API also serves Swagger at `/swagger`; see [configuration](configuration.md#ports) for the ports.
+The endpoints each service exposes. When `OpenApi:Enabled` is `true` (always in Development, and in `docker-compose.yml`) every public API also serves Swagger at `/swagger`; see [configuration](configuration.md#ports) for the ports.
 
 Every API also exposes `GET /health`, which returns `{ Status, Service }`. Payment and Notification have no other endpoints.
 
