@@ -2,7 +2,7 @@
 
 The endpoints each service exposes. When `OpenApi:Enabled` is `true` (always in Development, and in `docker-compose.yml`) every public API also serves Swagger at `/swagger`; see [configuration](configuration.md#ports) for the ports.
 
-Every API also exposes `GET /health`, which returns `{ Status, Service }`. Payment and Notification have no other endpoints.
+Every API also exposes `GET /health`, which checks that the service can reach its dependencies: PostgreSQL (Identity, Catalog, Ordering, Payment), RabbitMQ (Ordering, Payment, Notification) and Redis (Catalog). It returns `{ Status, Service, Checks }` with one entry per dependency, and `503` when any check fails. The gateway has no dependencies to check, so its `/health` only says it is up. Payment and Notification have no other endpoints.
 
 ## Contents
 

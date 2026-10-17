@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using BuildingBlocks.Messaging;
+using BuildingBlocks.Web;
 using BuildingBlocks.Web.Observability;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -156,6 +157,11 @@ try
         });
     });
 
+    // Dependency checks for /health
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<OrderingDbContext>("postgres")
+        .AddCheck<RabbitMqHealthCheck>("rabbitmq");
+
     var app = builder.Build();
 
     if (args.Contains("--migrate"))
@@ -211,7 +217,7 @@ try
     app.UseAuthorization();
 
     // Endpoint routing
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Ordering.Api" })).ExcludeFromDescription();
+    app.MapHealthEndpoints("Ordering.Api");
     app.MapOrderEndpoints();
     app.MapAdminOrderEndpoints();
 

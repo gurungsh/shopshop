@@ -1,3 +1,4 @@
+using BuildingBlocks.Web;
 using BuildingBlocks.Web.Observability;
 using FluentValidation;
 using Identity.Api.Endpoints;
@@ -124,6 +125,10 @@ try
         });
     });
 
+    // Dependency checks for /health
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<IdentityDbContext>("postgres");
+
     var app = builder.Build();
 
     if (args.Contains("--migrate"))
@@ -182,7 +187,7 @@ try
     app.UseAuthorization();
 
     // Endpoint routing
-    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Identity.Api" })).ExcludeFromDescription();
+    app.MapHealthEndpoints("Identity.Api");
     app.MapAdminUserEndpoints();
     app.MapAuthEndpoints();
     app.MapUserEndpoints();

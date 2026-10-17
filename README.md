@@ -23,7 +23,7 @@ Customers place orders, Payment charges them through Stripe (test mode), and Ord
 | Notification | Logs order updates for now. Event-driven, `/health` only | 7062 |
 | Gateway | YARP reverse proxy in front of Identity, Catalog and Ordering. Combined Swagger behind `OpenApi:Enabled` | 7080 |
 
-Every API also exposes `GET /health`. The full endpoint list is in the [API reference](docs/api.md).
+Every API also exposes `GET /health`, which checks that the service can reach its dependencies. The full endpoint list is in the [API reference](docs/api.md).
 
 ## Technology stack
 
@@ -108,7 +108,7 @@ Unchecked items are not implemented yet:
 - [x] **Integration tests** with Testcontainers for Identity, Catalog, Ordering, Payment and Notification
 - [x] **OpenTelemetry**: traces, metrics and logs in Grafana, with trace context carried through HTTP, RabbitMQ and the outbox
 - [x] **Containerizing all services**: every service and the gateway has an image, `docker compose up` runs the infrastructure, migrations, mock data and every app, and CI publishes the images to GHCR on every merge to `main`
-- [ ] **Readiness health checks**: `/health` returns a fixed response today. A readiness check should also confirm each service can reach its PostgreSQL database, RabbitMQ and (for Catalog) Redis
+- [x] **Readiness health checks**: `/health` confirms each service can reach its PostgreSQL database, RabbitMQ and (for Catalog) Redis
 - [ ] **Identity refresh tokens and logout**: `POST /api/auth/refresh` and `POST /api/auth/logout` are mapped but not implemented yet. Refresh should swap a refresh token for a new access token, and logout should revoke it
 
 The outboxes assume a single instance of each service. Scaling out would need row locking (`FOR UPDATE SKIP LOCKED`).

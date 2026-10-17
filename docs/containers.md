@@ -58,7 +58,7 @@ flowchart LR
 
 - **Migrations.** Identity, Catalog, Ordering and Payment each have a `<service>-migrate` container. It starts the same image with the argument `--migrate`, applies the EF migrations and exits. Outside Development the apps never migrate on their own startup.
 - **Mock data.** When all four migrations have finished, the `seed` container loads `scripts/seed/<Database>.sql` with `psql` and exits. Identity, Catalog, Ordering and Payment start only after it completes successfully. It never overwrites existing rows. See [mock data](seed-data.md) for the accounts and contents.
-- **Health.** Every app answers `GET /health` on port 8080. Compose waits for `service_healthy` before starting what depends on it.
+- **Health.** Every app answers `GET /health` on port 8080, which fails until it can reach its PostgreSQL, RabbitMQ or Redis. Compose waits for `service_healthy` before starting what depends on it.
 - **Consumers.** Payment, Ordering and Notification create their queues on their first start, so one `up` takes care of the "run every consumer once" step from [messaging](messaging.md#start-every-consumer-at-least-once).
 
 ## Configuration and secrets
@@ -110,7 +110,7 @@ Deploy by SHA, not `latest`, so that every environment runs a known build. The p
 What a Kubernetes or OpenShift deployment needs from these images, beyond the configuration and secrets above:
 
 - **Migrations**: run the app image once with the argument `--migrate`, as a Job, before rolling out the new version.
-- **Probes**: `GET /health` on port 8080, for readiness and liveness.
+- **Probes**: `GET /health` on port 8080 for readiness. It fails when PostgreSQL, RabbitMQ or Redis is unreachable, so don't use it as the liveness probe, or an outage restarts every pod; use a TCP check on port 8080 for liveness instead.
 - **Secrets**: mount them as files under `/run/secrets`, named like the configuration key (`JwtSettings__PrivateKeyPem`, `Stripe__SecretKey`).
 - **Forwarded headers**: behind an Ingress or Route, every request reaches the gateway from the router's address. Set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` on the gateway so that it reads the client address from `X-Forwarded-For`. Without it, the rate limiter puts every user in one bucket of 100 requests per minute. The setting trusts the header from any sender, so use it only where the router is the only way in. Leave it off in `docker-compose.yml`, where the gateway port is published directly and a client could send a fake header to avoid the limit.
 - **Random UID**: works without changes (see [How it is built](#how-it-is-built)).
