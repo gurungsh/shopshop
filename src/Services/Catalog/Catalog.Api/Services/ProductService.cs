@@ -1,0 +1,306 @@
+﻿using BuildingBlocks.Core;
+using Catalog.Api.Cacheing;
+using Catalog.Api.Caching;
+using Catalog.Api.DTOs;
+using Catalog.Api.Options;
+using Catalog.Infrastructure.Data;
+using Catalog.Infrastructure.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+
+namespace Catalog.Api.Services;
+
+public class ProductService : IProductService
+{
+    private readonly CatalogDbContext _dbContext;
+    private readonly ICatalogCache _cache;
+    private readonly CacheOptions _cacheOptions;
+    private readonly ILogger<ProductService> _logger;
+
+    public ProductService(
+        CatalogDbContext dbContext,
+        ICatalogCache cache,
+        IOptions<CacheOptions> cacheOptions,
+        ILogger<ProductService> logger)
+    {
+        _dbContext = dbContext;
+        _cache = cache;
+        _cacheOptions = cacheOptions.Value;
+        _logger = logger;
+    }
+
+    public async Task<Result<PagedResponse<ProductResponse>>> GetProductsAsync(ProductQuery query)
+    {
+        query = query with { Sku = query.Sku?.Trim().ToUpperInvariant() };
+
+        var version = await _cache.GetVersionAsync();
+        string? cacheKey = null;
+
+        if (version is not null)
+        {
+            cacheKey = CatalogCacheKeys.ProductSearch(
+                version,
+                query with { Name = query.Name?.Trim().ToLowerInvariant(), Description = query.Description?.Trim().ToLowerInvariant() });
+            var cached = await _cache.GetAsync<PagedResponse<ProductResponse>>(cacheKey);
+            if (cached is not null)
+            {
+                return Result<PagedResponse<ProductResponse>>.Success(cached);
+            }
+        }
+
+        var products = _dbContext.Products.AsNoTracking();
+
+        if (query.Ids?.Length > 0)
+        {
+            products = products.Where(p => query.Ids.Contains(p.Id));
+        }
+
+        if (query.CategoryIds?.Length > 0)
+        {
+            products = products.Where(p => query.CategoryIds.Contains(p.CategoryId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Name))
+        {
+            products = products.Where(p => EF.Functions.ILike(p.Name, LikePattern.Contains(query.Name), LikePattern.Escape));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Description))
+        {
+            products = products.Where(p => EF.Functions.ILike(p.Description, LikePattern.Contains(query.Description), LikePattern.Escape));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Sku))
+        {
+            products = products.Where(p => p.Sku == query.Sku);
+        }
+
+        if (query.MinPrice.HasValue)
+        {
+            products = products.Where(p => p.Price >= query.MinPrice);
+        }
+
+        if (query.MaxPrice.HasValue)
+        {
+            products = products.Where(p => p.Price <= query.MaxPrice);
+        }
+
+        var totalCount = await products.CountAsync();
+
+        var items = await products
+            .OrderBy(p => p.CreatedAtUtc)
+            .ThenBy(p => p.Id)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .Select(p => new ProductResponse(
+                p.Id,
+                p.CategoryId,
+                p.Name,
+                p.Description,
+                p.Sku,
+                p.Price,
+                p.IsActive,
+                p.CreatedAtUtc,
+                p.UpdatedAtUtc))
+            .ToListAsync();
+
+        var response = new PagedResponse<ProductResponse>(items, query.Page, query.PageSize, totalCount);
+
+        if (cacheKey is not null)
+        {
+            await _cache.SetAsync(cacheKey, response, TimeSpan.FromMinutes(_cacheOptions.SearchTtlMinutes));
+        }
+
+        return Result<PagedResponse<ProductResponse>>.Success(response);
+    }
+
+    public async Task<Result<ProductResponse>> GetProductAsync(Guid id)
+    {
+        var cacheKey = CatalogCacheKeys.Product(id);
+        var cached = await _cache.GetAsync<ProductResponse>(cacheKey);
+
+        if (cached is not null)
+        {
+            return Result<ProductResponse>.Success(cached);
+        }
+
+        var product = await _dbContext.Products
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (product is null)
+        {
+            _logger.LogWarning("Product not found. Product Id: {ProductId}", id);
+            return Result<ProductResponse>.Failure("Product not found.", ResultErrorType.NotFound);
+        }
+
+        var response = new ProductResponse(
+                product.Id,
+                product.CategoryId,
+                product.Name,
+                product.Description,
+                product.Sku,
+                product.Price,
+                product.IsActive,
+                product.CreatedAtUtc,
+                product.UpdatedAtUtc);
+
+        await _cache.SetAsync(cacheKey, response, TimeSpan.FromMinutes(_cacheOptions.EntityTtlMinutes));
+
+        return Result<ProductResponse>.Success(response);
+    }
+
+    public async Task<Result<ProductResponse>> CreateProductAsync(AdminCreateProductRequest request)
+    {
+        if (!await _dbContext.Categories.AnyAsync(c => c.Id == request.CategoryId))
+        {
+            return Result<ProductResponse>.Failure("Category does not exist.", ResultErrorType.BadRequest);
+        }
+
+        var sku = request.Sku.Trim().ToUpperInvariant();
+
+        if (await _dbContext.Products.AnyAsync(p => p.Sku == sku))
+        {
+            return Result<ProductResponse>.Failure("A Product with this SKU already exists.", ResultErrorType.Conflict);
+        }
+
+        var product = new Product
+        {
+            CategoryId = request.CategoryId,
+            Name = request.Name,
+            Description = request.Description,
+            Sku = sku,
+            Price = request.Price,
+            IsActive = true
+        };
+
+        _dbContext.Add(product);
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<ProductResponse>.Failure("A Product with this SKU already exists.", ResultErrorType.Conflict);
+        }
+        await _cache.BumpVersionAsync();
+
+        _logger.LogInformation("Product created. Product Id:{ProductId}, Name:{Name}", product.Id, product.Name);
+
+        return Result<ProductResponse>.Success(new ProductResponse(
+            product.Id,
+            product.CategoryId,
+            product.Name,
+            product.Description,
+            product.Sku,
+            product.Price,
+            product.IsActive,
+            product.CreatedAtUtc,
+            product.UpdatedAtUtc));
+    }
+
+    public async Task<Result<ProductResponse>> UpdateProductAsync(Guid id, AdminUpdateProductRequest request)
+    {
+        var product = await _dbContext.Products
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (product is null)
+        {
+            _logger.LogWarning("Product not found. Product Id:{ProductId}", id);
+            return Result<ProductResponse>.Failure("Product not found.", ResultErrorType.NotFound);
+        }
+
+        if (request.CategoryId.HasValue)
+        {
+            var categoryExists = await _dbContext.Categories
+                .AnyAsync(c => c.Id == request.CategoryId);
+            if (!categoryExists)
+            {
+                return Result<ProductResponse>.Failure("Category does not exist.", ResultErrorType.BadRequest);
+            }
+
+            product.CategoryId = request.CategoryId.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Name))
+        {
+            product.Name = request.Name;
+        }
+
+        if (request.Description is not null)
+        {
+            product.Description = request.Description;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Sku))
+        {
+            var sku = request.Sku.Trim().ToUpperInvariant();
+            var skuExists = await _dbContext.Products
+                .AnyAsync(p => p.Sku == sku && p.Id != id);
+            if (skuExists)
+            {
+                return Result<ProductResponse>.Failure("A Product with this SKU already exists.", ResultErrorType.Conflict);
+            }
+
+            product.Sku = sku;
+        }
+
+        if (request.Price.HasValue)
+        {
+            product.Price = request.Price.Value;
+        }
+
+        if (request.IsActive.HasValue)
+        {
+            product.IsActive = request.IsActive.Value;
+        }
+
+        product.UpdatedAtUtc = DateTime.UtcNow;
+
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            return Result<ProductResponse>.Failure("A Product with this SKU already exists.", ResultErrorType.Conflict);
+        }
+        await _cache.RemoveAsync(CatalogCacheKeys.Product(product.Id));
+        await _cache.BumpVersionAsync();
+
+        _logger.LogInformation("Product updated. Product Id:{ProductId}", product.Id);
+
+        return Result<ProductResponse>.Success(new ProductResponse(
+            product.Id,
+            product.CategoryId,
+            product.Name,
+            product.Description,
+            product.Sku,
+            product.Price,
+            product.IsActive,
+            product.CreatedAtUtc,
+            product.UpdatedAtUtc
+            ));
+    }
+
+    public async Task<Result<bool>> DeleteProductAsync(Guid id)
+    {
+        var product = await _dbContext.Products
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (product is null)
+        {
+            _logger.LogWarning("Product not found. Product Id:{ProductId}", id);
+            return Result<bool>.Failure("Product not found.", ResultErrorType.NotFound);
+        }
+
+        _dbContext.Products.Remove(product);
+        await _dbContext.SaveChangesAsync();
+        await _cache.RemoveAsync(CatalogCacheKeys.Product(product.Id));
+        await _cache.BumpVersionAsync();
+
+        _logger.LogInformation("Product deleted. Product Id:{ProductId}", id);
+
+        return Result<bool>.Success(true);
+    }
+}

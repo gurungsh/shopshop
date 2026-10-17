@@ -1,0 +1,234 @@
+using System.Text.Json.Serialization;
+using BuildingBlocks.Messaging;
+using BuildingBlocks.Web.Observability;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using Ordering.Api.Endpoints;
+using Ordering.Api.Messaging;
+using Ordering.Api.Options;
+using Ordering.Api.Services;
+using Ordering.Infrastructure.Data;
+using Serilog;
+
+// Logger setup
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
+    Log.Information("Starting Ordering.Api application.");
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Serilog
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .WriteToOtlp("Ordering.Api"));
+
+    // OpenTelemetry
+    builder.Services.AddShopShopTelemetry("Ordering.Api");
+
+    // Configuration and options
+    var jwtSettings = builder.Configuration
+        .GetSection(JwtOptions.SectionName)
+        .Get<JwtOptions>()
+        ?? throw new InvalidOperationException("JwtSettings configuration is missing.");
+
+    if (!Uri.TryCreate(jwtSettings.MetadataAddress, UriKind.Absolute, out _))
+    {
+        throw new InvalidOperationException("JwtSettings MetadataAddress is missing or invalid.");
+    }
+
+    if (string.IsNullOrWhiteSpace(jwtSettings.Issuer) || string.IsNullOrWhiteSpace(jwtSettings.Audience))
+    {
+        throw new InvalidOperationException("JwtSettings Issuer and Audience are required.");
+    }
+
+    builder.Services.Configure<JwtOptions>(
+        builder.Configuration.GetSection(JwtOptions.SectionName));
+
+    var catalogServiceSettings = builder.Configuration
+        .GetSection(CatalogServiceOptions.SectionName)
+        .Get<CatalogServiceOptions>()
+        ?? throw new InvalidOperationException("CatalogService configuration is missing.");
+
+    if (!Uri.TryCreate(catalogServiceSettings.BaseUrl, UriKind.Absolute, out var catalogBaseUri))
+    {
+        throw new InvalidOperationException("CatalogService BaseUrl is missing or invalid.");
+    }
+
+    builder.Services.AddOptions<PaymentOptions>()
+        .BindConfiguration(PaymentOptions.SectionName)
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+
+    // Infrastructure and database services
+    var connectionString = builder.Configuration.GetConnectionString("OrderDb")
+        ?? throw new InvalidOperationException("Connection string 'OrderDb' is missing.");
+
+    builder.Services.AddDbContext<OrderingDbContext>(options =>
+        options.UseNpgsql(connectionString));
+
+    // Authentication and authorization
+    builder.Services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.MetadataAddress = jwtSettings.MetadataAddress;
+            options.RequireHttpsMetadata = jwtSettings.RequireHttpsMetadata;
+            options.Events = new JwtBearerEvents
+            {
+                OnAuthenticationFailed = context =>
+                {
+                    Log.Warning(context.Exception, "JWT authentication failed.");
+                    return Task.CompletedTask;
+                }
+            };
+
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                ValidateIssuer = true,
+                ValidIssuer = jwtSettings.Issuer,
+                ValidateAudience = true,
+                ValidAudience = jwtSettings.Audience,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromSeconds(30)
+            };
+        });
+
+    builder.Services.AddAuthorization();
+
+    // Application business services
+    builder.Services.AddScoped<IOrderingService, OrderingService>();
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+    // Service-to-service communication
+    builder.Services
+        .AddHttpClient<ICatalogServiceClient, CatalogServiceClient>(client =>
+            client.BaseAddress = catalogBaseUri)
+        .AddStandardResilienceHandler();
+
+    // Messaging: order events are written to the outbox and published to RabbitMQ in the background
+    builder.Services.AddRabbitMq(builder.Configuration);
+    builder.Services.AddOutboxOptions();
+    builder.Services.AddHostedService<OutboxPublisher>();
+    builder.Services.AddHostedService<PaymentEventsConsumer>();
+
+    // Serialize enums (e.g. OrderStatus) as strings
+    builder.Services.ConfigureHttpJsonOptions(options =>
+        options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+    // API documentation and diagnostics
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen(options =>
+    {
+        options.SupportNonNullableReferenceTypes();
+        options.NonNullableReferenceTypesAsRequired();
+
+        options.SwaggerDoc("v1", new OpenApiInfo
+        {
+            Title = "Ordering API",
+            Version = "v1"
+        });
+
+        var securityScheme = new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "Bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "Enter your JWT token directly. Swagger will automatically format it as 'Bearer <token>'."
+        };
+
+        options.AddSecurityDefinition("Bearer", securityScheme);
+
+        options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+        });
+    });
+
+    var app = builder.Build();
+
+    if (args.Contains("--migrate"))
+    {
+        using var migrationScope = app.Services.CreateScope();
+        await migrationScope.ServiceProvider.GetRequiredService<OrderingDbContext>().Database.MigrateAsync();
+        Log.Information("Database migrated.");
+        return;
+    }
+
+    // Request logging early in the pipeline
+    app.UseSerilogRequestLogging();
+
+    // Global exception handling
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            var exceptionFeature = context.Features.Get<IExceptionHandlerFeature>();
+            Log.Error(exceptionFeature?.Error, "Unhandled exception occurred.");
+
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred." });
+        });
+    });
+
+    // OpenAPI document and UI, on in Development and wherever OpenApi:Enabled is set
+    if (app.Configuration.GetValue<bool>("OpenApi:Enabled"))
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI(options =>
+        {
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "Ordering API v1");
+        });
+    }
+
+    // Development tooling
+    if (app.Environment.IsDevelopment())
+    {
+        Log.Information("Running in Development environment.");
+
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
+        await dbContext.Database.MigrateAsync();
+    }
+
+    // Security middleware - HTTPS redirect
+    app.UseHttpsRedirection();
+
+    // Security middleware - Authentication and Authorization
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    // Endpoint routing
+    app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Service = "Ordering.Api" })).ExcludeFromDescription();
+    app.MapOrderEndpoints();
+    app.MapAdminOrderEndpoints();
+
+    Log.Information("Application pipeline configured. Running application.");
+
+    app.Run();
+}
+catch (Exception ex) when (ex is not HostAbortedException)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly.");
+}
+finally
+{
+    Log.Information("Shutting down Ordering.Api.");
+    Log.CloseAndFlush();
+}
+
+
+// Makes Program visible to WebApplicationFactory<Program> in integration tests.
+public partial class Program;

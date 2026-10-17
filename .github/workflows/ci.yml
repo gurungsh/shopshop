@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [development, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      # Integration tests start Postgres and RabbitMQ with Testcontainers, using the runner's Docker
+      - run: dotnet test ShopShop.slnx
+
+  images:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - { name: identity,     project: src/Services/Identity/Identity.Api,         dll: Identity.Api.dll }
+          - { name: catalog,      project: src/Services/Catalog/Catalog.Api,           dll: Catalog.Api.dll }
+          - { name: ordering,     project: src/Services/Ordering/Ordering.Api,         dll: Ordering.Api.dll }
+          - { name: payment,      project: src/Services/Payment/Payment.Api,           dll: Payment.Api.dll }
+          - { name: notification, project: src/Services/Notification/Notification.Api, dll: Notification.Api.dll }
+          - { name: gateway,      project: src/Gateway/Gateway.Api,                    dll: Gateway.Api.dll }
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/shopshop-${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Pull requests and development only build; pushes to main publish <sha> and latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: |
+            PROJECT=${{ matrix.project }}
+            DLL=${{ matrix.dll }}
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
