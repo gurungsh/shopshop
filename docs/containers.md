@@ -97,7 +97,7 @@ Environment variable names must not contain a hyphen. The image starts the app t
 1. **test**: `dotnet test ShopShop.slnx`. The integration tests start Postgres and RabbitMQ with Testcontainers on the runner's Docker.
 2. **images**: after the tests pass, builds the six apps in parallel from the same `Dockerfile` with the same `PROJECT` and `DLL` values as `docker-compose.yml`.
 
-Pull requests only build the images. Pushes to `development` also publish them to GitHub Container Registry:
+Changes are merged into `development`, and `development` is merged into `main` to release. Pull requests and pushes to `development` only build the images. Pushes to `main` also publish them to GitHub Container Registry:
 
 | Image | Tags |
 |---|---|
