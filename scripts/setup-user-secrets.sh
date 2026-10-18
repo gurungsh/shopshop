@@ -15,6 +15,7 @@ KEY=~/shopshop-keys/jwt-private.pem
 if [[ ! -f $KEY ]]; then
   mkdir -p "$(dirname "$KEY")"
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEY"
+  chmod 600 "$KEY"
 fi
 
 secret() { dotnet user-secrets set "$2" "$3" --project "src/Services/$1/$1.Api" >/dev/null; }

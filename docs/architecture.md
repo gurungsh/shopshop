@@ -146,7 +146,7 @@ erDiagram
     %% ---------- AuthDb (Identity) ----------
     Users {
         uuid Id PK
-        varchar Email UK "max 256, normalised lower-case"
+        varchar Email UK "max 256, normalized lowercase"
         text PasswordHash "ASP.NET PasswordHasher"
         varchar Role "Admin | Customer"
         timestamptz CreatedAtUtc "default now()"
@@ -198,7 +198,7 @@ erDiagram
     OutboxMessages {
         uuid Id PK "used as RabbitMQ MessageId"
         varchar Type "routing key, max 200"
-        jsonb Payload "serialised event"
+        jsonb Payload "serialized event"
         timestamptz OccurredAtUtc
         timestamptz ProcessedAtUtc "nullable, indexed"
         int Attempts
@@ -415,7 +415,7 @@ Where each idea lives in the code.
 | Topology | Two topic exchanges, one durable queue per consumer, dead-lettering to `<queue>.dead`. See [messaging](messaging.md). | `MessagingTopology.cs`, `RoutingKeys.cs` |
 | Choreography | No central coordinator. Each service reacts to events and publishes its own. | `*.Api/Messaging/*Consumer.cs` |
 | Idempotent consumers | One `PaymentTransaction` per order and attempt, a Stripe idempotency key per attempt, and Ordering ignores stale results. | `PaymentProcessingService`, `OrderingService.IsCurrentPendingAttempt` |
-| Event contracts | Versionable `sealed record`s in a shared library, serialised as camelCase JSON. | `BuildingBlocks.Contracts/` |
+| Event contracts | Versionable `sealed record`s in a shared library, serialized as camelCase JSON. | `BuildingBlocks.Contracts/` |
 
 ### Testing
 
